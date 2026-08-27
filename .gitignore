@@ -1,0 +1,22 @@
+# Rust
+/target
+**/*.rs.bk
+*.pdb
+
+# Overrides locales de Claude Code (no se comparten)
+.claude/settings.local.json
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editores
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Entorno
+.env
+.env.local
