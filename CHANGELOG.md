@@ -2,6 +2,14 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.6.0] - 2026-08-28
+
+### Agregado
+
+- Skill `chatarrero`, para crear y reparar scrapers: abre con una compuerta de preguntas, decide entre editar un scraper existente o crear uno nuevo según las convenciones del repo destino, sondea el sitio objetivo con subagentes de prueba puntuales y elige el nivel más barato de la cascada de fetching —API o RSS, HTTP simple, endpoints descubiertos, render con Playwright o navegador anti-bot— antes de escribir código.
+- Cascada documentada nivel por nivel (`references/cascada.md`) con tácticas medidas en producción: escalada de headers, cascada de conexión para sitios inestables, clasificación de errores antes de reintentar, detección de SPAs por razón de texto, `domcontentloaded` + settle en vez de `networkidle`, escalada por fingerprint TLS y navegadores anti-detección para WAFs duros, además de los casos donde subir de nivel no sirve.
+- Bitácora fechada (`references/bitacora.md`) de qué funcionó y qué no, para no repetir intentos descartados, sembrada con tácticas de producción y una verificación web de Playwright, nodriver y curl_cffi. Los casos se describen por tipo de sitio, sin nombres de proyectos ni objetivos concretos.
+
 ## [1.5.0] - 2026-08-28
 
 ### Agregado
