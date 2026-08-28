@@ -2,6 +2,16 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.2.0] - 2026-08-28
+
+### Agregado
+
+- Skill `biblio-rata`, que indexa PDFs con SQLite FTS5 y devuelve fragmentos
+  relevantes con referencias de página, junto con sus scripts, referencias de
+  uso e instalación.
+- Documentación autosuficiente de los experimentos que establecen el criterio
+  de conveniencia de la skill y sus límites operativos.
+
 ## [1.1.0] - 2026-08-28
 
 ### Agregado
