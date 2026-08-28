@@ -2,6 +2,12 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.6.1] - 2026-08-28
+
+### Corregido
+
+- `prueba-y-error`: `ledger.py plan --fuentes-json` valida de inmediato que el JSON tenga la forma `{"ids": [...]}` con al menos un identificador de caso. Antes, una entrada mal formada (por ejemplo, referenciar el archivo del banco en vez de los ids de caso consultados) guardaba `fuentes: null` en el plan sin ningún error, y el problema solo aparecía después, de forma confusa, al comparar con el `resultado`. Los mensajes de discrepancia de `test_aplicado` y `fuentes` entre `plan` y `resultado` ahora muestran ambos valores en conflicto en vez de solo avisar que no coinciden.
+
 ## [1.6.0] - 2026-08-28
 
 ### Agregado

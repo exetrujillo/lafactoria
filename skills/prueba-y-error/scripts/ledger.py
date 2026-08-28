@@ -37,6 +37,19 @@ def cargar_valor_json(argumento):
         raise ValueError("el registro debe ser un objeto JSON")
     return valor
 
+def cargar_fuentes_json(argumento):
+    ruta = Path(argumento)
+    texto = ruta.read_text(encoding="utf-8") if ruta.is_file() else argumento
+    valor = json.loads(texto)
+    ids = valor.get("ids") if isinstance(valor, dict) else None
+    if (not isinstance(valor, dict) or not isinstance(ids, list) or not ids
+            or any(not isinstance(item, str) or not item for item in ids)):
+        raise ValueError(
+            '--fuentes-json debe tener la forma {"ids": ["caso-1", ...]} '
+            'con al menos un identificador de caso (no un nombre de archivo ni una lista suelta)'
+        )
+    return ids
+
 def validar_resultado(registro):
     metrica = registro.get("metrica")
     if not isinstance(metrica, dict) or not isinstance(metrica.get("intervalo"), list) or len(metrica["intervalo"]) != 2:
@@ -124,9 +137,16 @@ def agregar_registro(ledger, contrato, registro, tipo):
         if plan is None:
             raise ValueError("resultado huérfano: no existe un plan previo bajo el linaje vigente")
         if registro.get("test_aplicado") != plan.get("test_declarado"):
-            raise ValueError("test_aplicado no coincide con test_declarado del plan")
+            raise ValueError(
+                f"test_aplicado no coincide con test_declarado del plan: "
+                f"declarado={plan.get('test_declarado')!r} "
+                f"aplicado={registro.get('test_aplicado')!r}"
+            )
         if registro.get("fuentes") != plan.get("fuentes"):
-            raise ValueError("fuentes del resultado no coinciden con las declaradas en el plan")
+            raise ValueError(
+                f"fuentes del resultado no coinciden con las declaradas en el plan: "
+                f"declaradas={plan.get('fuentes')!r} resultado={registro.get('fuentes')!r}"
+            )
         validar_resultado(registro)
     elif tipo == "diagnostico":
         # la interpretación necesita el dato ya escrito. Sin resultado previo no
@@ -286,7 +306,7 @@ def main():
                 "diseno": cargar_valor_json(args.diseno_json),
                 "test_declarado": args.test_declarado,
                 "decision_si_falla": args.decision_si_falla,
-                "fuentes": cargar_valor_json(args.fuentes_json).get("ids"),
+                "fuentes": cargar_fuentes_json(args.fuentes_json),
                 "regla": args.regla,
             }
             if args.hash_banco:
