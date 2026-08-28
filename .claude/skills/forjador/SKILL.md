@@ -2,7 +2,7 @@
 name: forjador
 description: >
   Usa esta skill cuando el usuario quiera crear, esbozar, refinar o publicar
-  una skill de Claude Code en este repositorio. El forjador dirige la línea de
+  una skill compatible con agentes de código en este repositorio. El forjador dirige la línea de
   producción: aclara el propósito con preguntas puntuales, genera el SKILL.md
   y sus archivos de soporte, valida con skillcheck, itera con el usuario y
   finalmente instala la skill terminada donde corresponda.
@@ -16,20 +16,42 @@ preguntas, máxima claridad en el resultado.
 
 ## 1. Aclarar el propósito (una sola tanda de preguntas)
 
-Antes de escribir nada, usa `AskUserQuestion` para resolver en una sola tanda:
+Antes de escribir nada, usa la herramienta disponible para hacer preguntas al usuario y
+resolver en una o varias rondas, dependiendo de si una pregunta pudiera depender de
+otra respuesta:
 
 - ¿Qué tarea o frase del usuario debe disparar esta skill? (esto define la
-  `description`, que es lo único que Claude ve antes de decidir invocarla).
-- ¿La skill la ejecuta el propio Claude en la conversación, o conviene que
+  `description`, que es lo único que el agente ve antes de decidir invocarla).
+- ¿La skill la ejecuta el agente en la conversación, o conviene que
   corra en un subagente / en background?
 - ¿Necesita archivos de soporte (`references/`, `scripts/`, `assets/`) o le
   basta con instrucciones en el cuerpo del SKILL.md?
 - ¿Esta skill es solo para este proyecto, o debería quedar disponible para
   cualquier proyecto? (define el alcance de la instalación en el paso 6).
-- ¿Conviene investigar con `WebSearch`/`WebFetch` (documentación oficial,
+- ¿Conviene investigar con las herramientas web disponibles (documentación oficial,
   repos de referencia) antes de escribir la skill, o basta con el
   conocimiento ya disponible? Investigar gasta más tokens, así que esto se
   decide explícitamente y no por defecto.
+
+Las 5 preguntas van juntas en la misma llamada a la herramienta de preguntas — no
+descartes en silencio la que te parezca "obvia". Si tienes una recomendación
+clara para alguna, ofrécela como opción marcada "(Recomendado)" dentro de esa
+misma pregunta; no la respondas tú por el usuario ni la omitas de la tanda.
+Esto aplica en particular a la pregunta de investigación: aunque tu criterio
+sea que no hace falta, la decisión es del usuario, no tuya por defecto.
+
+Cada opción tiene que llevar su **contra explícita** en la descripción, no solo
+su etiqueta. Una tanda donde todas las opciones suenan bien no es una decisión:
+es un trámite. Si una alternativa tiene un costo real —más contexto, más
+fricción, menos control, un riesgo asumido—, decilo ahí, aunque sea la opción
+que estás recomendando.
+
+Si la skill que se está creando va a tener un disparador amplio y su ejecución
+cuesta caro (muchas corridas, mucho contexto, decisiones difíciles de revertir),
+evaluá con el usuario el patrón de **compuerta**: la skill se autoinvoca, pero su
+cuerpo abre mandando a preguntar antes de actuar, con las alternativas y sus
+costos sobre la mesa. Se paga un clic y se evita arrancar trabajo que el usuario
+no pidió.
 
 No repitas esta ronda salvo que una respuesta abra una ambigüedad real que
 bloquee continuar. Si la respuesta a la investigación fue sí, hazla en esta
@@ -63,12 +85,16 @@ relativa completa para que `skillcheck` pueda verificar que existen de verdad
 Una sola corrida por iteración, desde la raíz del repo:
 
 ```sh
-cargo run --quiet -- lint skills/<nombre>
+cargo run --quiet -- lint
 ```
 
-o `cargo run --quiet -- lint` para validar todo el repo de una vez. Corrige
-lo que reporte como `error:` antes de mostrarle nada al usuario; las
-`advertencia:` son opcionales de resolver.
+`lint` recibe el directorio que **contiene** las skills (por defecto `./skills`),
+no una skill suelta. Pasarle `skills/<nombre>` hace que trate a sus
+subdirectorios `references/` y `scripts/` como si fueran skills y reporte
+errores falsos del tipo `[scripts] falta el archivo SKILL.md`. Valida el repo
+entero de una vez, que además es una sola corrida.
+
+Corrige todos los `error:` antes de mostrarle nada al usuario.
 
 ## 5. Iterar con el usuario
 
@@ -87,7 +113,7 @@ cargo run --quiet -- install <nombre> --global   # todos los proyectos: ~/.claud
 ```
 
 Si la skill es `forjador` mismo u otra pensada para este repo, instálala en el
-proyecto para que quede disponible en las conversaciones de Claude Code aquí.
+    proyecto para que quede disponible en las conversaciones de agentes aquí.
 Si el usuario definió en el paso 1 que la skill sirve para cualquier
 proyecto, usa `--global`. Después de editar una skill ya instalada hay que
 volver a correr `install` para refrescar la copia.
