@@ -2,6 +2,16 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.0.1] - 2026-08-28
+
+### Cambiado
+
+- `.gitignore` excluye los artefactos que genera el flujo de trabajo interno y
+  que no se versionan: `docs/literatura/` (material de referencia local),
+  `experimentos/` (contratos, bancos, ledgers y crudos de `prueba-y-error`) y
+  las cachés de Python de los scripts de las skills. El resumen versionado de
+  cada experimento vive aparte, en `docs/experimentos/`.
+
 ## [1.0.0] - 2026-08-27
 
 ### Agregado

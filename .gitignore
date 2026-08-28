@@ -20,3 +20,13 @@ Thumbs.db
 # Entorno
 .env
 .env.local
+
+# Material de referencia local (no se versiona)
+/docs/literatura/
+
+# Python (scripts de skills)
+__pycache__/
+*.pyc
+
+# Artefactos de experimentos (crudos y ledgers, no se versionan)
+/experimentos/
