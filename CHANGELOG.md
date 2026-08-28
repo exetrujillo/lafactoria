@@ -2,6 +2,15 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.5.0] - 2026-08-28
+
+### Agregado
+
+- Skill `prueba-y-error`, un bucle de experimentación que convierte una decisión técnica en una medición en vez de una impresión: contrato congelado antes de empezar, predicción antes del dato, análisis declarado antes de correr, dos fases autónomas —tamizaje barato y confirmación pareada— y un ledger append-only en disco como única memoria.
+- Arnés de procedencia bajo la regla de que el LLM no escribe ninguna cifra: recibos de consumo medidos con el reloj, métrica, intervalo, efecto y corrección múltiple recalculados desde el crudo, verificación de contrato, presupuesto y reporte, y `ronda.py` para encadenar una ronda entera en un solo comando. El ledger lleva tres registros por iteración —`plan` antes de correr, `resultado` derivado del recibo y del análisis, y `diagnostico` con la interpretación del agente—, y una ronda nueva se bloquea mientras queden resultados sin diagnosticar.
+- `autoprueba.py`, que ejercita el arnés contra sus propios modos de fallo —métrica inflada a mano, crudo reescrito, costo subdeclarado, `run_id` reutilizado, separación inventada, diagnóstico huérfano o duplicado— en segundos y sin gastar un token.
+- Política de continuidad autónoma: la decisión de medir cubre el ciclo completo, y un veredicto `SEGUIR MIDIENDO` relanza una ronda de diseño distinto en lugar de devolverle el control al usuario.
+
 ## [1.4.0] - 2026-08-28
 
 ### Agregado
