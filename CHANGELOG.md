@@ -2,6 +2,13 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.3.0] - 2026-08-28
+
+### Agregado
+
+- Skill `la-quinta-pata`, que audita lateralmente código, arquitectura, ensayos, argumentos y decisiones mediante técnicas de inversión, supuestos, foco desplazado, analogía estructural y contrario fuerte con premortem.
+- Contrato de hallazgos con evidencia localizada, mecanismo causal, condición de refutación, confianza, mitigación y criterio de parada.
+
 ## [1.2.0] - 2026-08-28
 
 ### Agregado
