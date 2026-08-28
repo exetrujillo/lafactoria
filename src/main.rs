@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 
 const MAX_DESCRIPTION_LEN: usize = 1024;
+const MAX_NAME_LEN: usize = 64;
 const RESOURCE_PREFIXES: [&str; 3] = ["references/", "scripts/", "assets/"];
 
 struct Frontmatter {
@@ -13,18 +14,14 @@ struct Frontmatter {
 
 struct Report {
     errors: Vec<String>,
-    warnings: Vec<String>,
 }
 
 impl Report {
     fn new() -> Self {
-        Report { errors: Vec::new(), warnings: Vec::new() }
+        Report { errors: Vec::new() }
     }
     fn error(&mut self, skill: &str, msg: impl Into<String>) {
         self.errors.push(format!("[{skill}] {}", msg.into()));
-    }
-    fn warn(&mut self, skill: &str, msg: impl Into<String>) {
-        self.warnings.push(format!("[{skill}] {}", msg.into()));
     }
 }
 
@@ -99,6 +96,27 @@ fn strip_quotes(s: &str) -> String {
     s.to_string()
 }
 
+fn is_opencode_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > MAX_NAME_LEN || name.starts_with('-') || name.ends_with('-') {
+        return false;
+    }
+
+    let mut previous_hyphen = false;
+    for byte in name.bytes() {
+        if byte == b'-' {
+            if previous_hyphen {
+                return false;
+            }
+            previous_hyphen = true;
+        } else if !byte.is_ascii_lowercase() && !byte.is_ascii_digit() {
+            return false;
+        } else {
+            previous_hyphen = false;
+        }
+    }
+    true
+}
+
 fn check_referenced_paths(skill_dir: &Path, body: &str, skill: &str, report: &mut Report) {
     for raw_token in body.split(|c: char| c.is_whitespace() || c == '(' || c == ')' || c == '`') {
         let token = raw_token.trim_matches(|c| c == '[' || c == ']' || c == ',' || c == '.');
@@ -152,15 +170,19 @@ fn lint_skill(skill_dir: &Path, seen_names: &mut Vec<(String, String)>, report: 
             &dir_name,
             format!("'name: {n}' no coincide con el nombre del directorio '{dir_name}'"),
         ),
+        Some(n) if !is_opencode_name(n) => report.error(
+            &dir_name,
+            "'name' debe cumplir el formato de OpenCode: minúsculas, números y guiones simples, entre 1 y 64 caracteres",
+        ),
         Some(n) => seen_names.push((n.clone(), dir_name.clone())),
     }
 
     match &fm.description {
         None => report.error(&dir_name, "al frontmatter le falta el campo obligatorio 'description'"),
         Some(d) if d.trim().is_empty() => report.error(&dir_name, "'description' no puede estar vacía"),
-        Some(d) if d.len() > MAX_DESCRIPTION_LEN => report.warn(
+        Some(d) if d.len() > MAX_DESCRIPTION_LEN => report.error(
             &dir_name,
-            format!("'description' tiene {} caracteres; conviene acortarla a menos de {MAX_DESCRIPTION_LEN}", d.len()),
+            format!("'description' tiene {} caracteres; no puede superar {MAX_DESCRIPTION_LEN}", d.len()),
         ),
         _ => {}
     }
@@ -222,20 +244,16 @@ fn lint_all(skills_dir: &Path) -> Report {
 fn run_lint(dir: &str) {
     let report = lint_all(&PathBuf::from(dir));
 
-    for w in &report.warnings {
-        println!("advertencia: {w}");
-    }
     for e in &report.errors {
         println!("error: {e}");
     }
 
     if report.errors.is_empty() {
-        println!("OK ({} advertencia(s))", report.warnings.len());
+        println!("OK");
     } else {
         println!(
-            "FALLÓ: {} error(es), {} advertencia(s)",
-            report.errors.len(),
-            report.warnings.len()
+            "FALLÓ: {} error(es)",
+            report.errors.len()
         );
         exit(1);
     }
@@ -253,6 +271,34 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+fn directories_equal(src: &Path, dst: &Path) -> std::io::Result<bool> {
+    let mut src_entries: Vec<_> = fs::read_dir(src)?.filter_map(Result::ok).collect();
+    let mut dst_entries: Vec<_> = fs::read_dir(dst)?.filter_map(Result::ok).collect();
+    src_entries.sort_by_key(|entry| entry.file_name());
+    dst_entries.sort_by_key(|entry| entry.file_name());
+
+    if src_entries.len() != dst_entries.len() {
+        return Ok(false);
+    }
+
+    for (src_entry, dst_entry) in src_entries.iter().zip(dst_entries.iter()) {
+        if src_entry.file_name() != dst_entry.file_name() {
+            return Ok(false);
+        }
+        if src_entry.file_type()?.is_dir() != dst_entry.file_type()?.is_dir() {
+            return Ok(false);
+        }
+        if src_entry.file_type()?.is_dir() {
+            if !directories_equal(&src_entry.path(), &dst_entry.path())? {
+                return Ok(false);
+            }
+        } else if fs::read(src_entry.path())? != fs::read(dst_entry.path())? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn run_install(name: &str, global: bool) {
@@ -295,6 +341,17 @@ fn run_install(name: &str, global: bool) {
     if let Err(e) = copy_dir_recursive(&source, &dest) {
         eprintln!("error: no se pudo copiar la skill a '{}': {e}", dest.display());
         exit(1);
+    }
+    match directories_equal(&source, &dest) {
+        Ok(true) => {}
+        Ok(false) => {
+            eprintln!("error: la copia instalada no coincide con skills/{name}");
+            exit(1);
+        }
+        Err(e) => {
+            eprintln!("error: no se pudo verificar la copia instalada: {e}");
+            exit(1);
+        }
     }
 
     let alcance = if global { "global (disponible en todos los proyectos)" } else { "de este proyecto" };
@@ -361,5 +418,14 @@ mod tests {
         assert_eq!(strip_quotes("\"hello\""), "hello");
         assert_eq!(strip_quotes("'hello'"), "hello");
         assert_eq!(strip_quotes("hello"), "hello");
+    }
+
+    #[test]
+    fn accepts_only_opencode_skill_names() {
+        assert!(is_opencode_name("prueba-y-error"));
+        assert!(is_opencode_name("skill2"));
+        assert!(!is_opencode_name("Prueba"));
+        assert!(!is_opencode_name("dos--guiones"));
+        assert!(!is_opencode_name("-invalido"));
     }
 }
