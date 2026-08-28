@@ -1,11 +1,11 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides project guidance for Claude Code, OpenCode, and other coding agents working in this repository.
 
 ## Qué es este repo
 
-Repositorio de trabajo para diseñar y validar skills de Claude Code. El flujo
-principal no es "compilar software": es conversacional. Se trabaja con Claude
+Repositorio de trabajo para diseñar y validar skills para agentes de código. El flujo
+principal no es "compilar software": es conversacional. Se trabaja con un agente
 para redactar, iterar y validar cada `skills/<nombre>/SKILL.md`, apoyándose en
 la skill maestra `skills/forjador/SKILL.md`, que define el proceso paso a
 paso (aclarar propósito → nombrar → escribir → validar → instalar → iterar).
@@ -14,9 +14,13 @@ El lenguaje principal del repo es **Rust**, usado exclusivamente para las
 herramientas de soporte (el validador/instalador `skillcheck`). Las skills en
 sí pueden documentar flujos de trabajo en cualquier lenguaje o stack.
 
+OpenCode usa este `CLAUDE.md` como fallback si no existe un `AGENTS.md`, y
+descubre las copias instaladas en `.claude/skills/`. No crear un `AGENTS.md`
+redundante: tendría prioridad y podría divergir de este archivo.
+
 Distinción importante: `skills/<nombre>/` es el código fuente editable de
 cada skill; `.claude/skills/<nombre>/` es la copia instalada (generada por
-`skillcheck install`) que Claude Code realmente lee. Editar una skill sin
+`skillcheck install`) que los agentes realmente leen. Editar una skill sin
 reinstalarla no tiene efecto en las conversaciones.
 
 ## Comandos
@@ -29,9 +33,9 @@ cargo run --quiet -- install NOMBRE --global # instalar en ~/.claude/skills (tod
 cargo test --quiet                           # tests unitarios del parser de frontmatter
 ```
 
-`lint` termina con exit code `1` si hay algún `error:`; las `advertencia:` no
-rompen la corrida. `install` corre `lint` sobre la skill primero y se niega a
-instalar si hay errores.
+`lint` termina con exit code `1` si hay algún `error:`. `install` corre `lint`
+sobre la skill primero, verifica que la copia resultante sea idéntica a la
+fuente y se niega a instalar si hay errores.
 
 ## Arquitectura
 
@@ -57,9 +61,10 @@ instalar si hay errores.
   (`--global`), reemplazando el destino si ya existe.
 - `skills/<nombre>/SKILL.md` — cada subdirectorio de `skills/` es una skill
   candidata. Regla no negociable: el campo `name` del frontmatter debe ser
-  idéntico al nombre del directorio que la contiene.
+  idéntico al nombre del directorio que la contiene y cumplir el formato de
+  OpenCode (`^[a-z0-9]+(-[a-z0-9]+)*$`, máximo 64 caracteres).
 - `skills/forjador/SKILL.md` — skill maestra: orquesta la creación de nuevas
-  skills (una sola tanda de `AskUserQuestion`, sin repetir rondas), las valida
+  skills (una sola tanda de preguntas, sin repetir rondas), las valida
   y las instala, y documenta explícitamente las reglas que aplica
   `skillcheck`. Si se cambia una regla de validación en `src/main.rs`,
   actualizar esa sección también para que no queden desalineadas.

@@ -6,6 +6,13 @@
 # Overrides locales de Claude Code (no se comparten)
 .claude/settings.local.json
 
+# Skills instaladas localmente; solo se versiona la copia de forjador
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/forjador/
+!.claude/skills/forjador/SKILL.md
+
 # Sistema operativo
 .DS_Store
 Thumbs.db
