@@ -2,6 +2,22 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.7.0] - 2026-08-29
+
+### Cambiado
+
+- `README.md` reescrito como fuente de verdad del sentido del repositorio:
+  cuatro principios de diseño (vivencias que no se destruyen, lo que varía por
+  usuario no se versiona, neutralidad entre arneses, economía de contexto),
+  el ecosistema de relaciones entre skills (autointeracción, uso, estudio,
+  herencia, crianza), el criterio de qué entra y qué no como skill nueva, el
+  ciclo de vida completo (nacer, iterar, publicar, versionar, retirar) y el
+  esquema de `vivencias/` con su ciclo de promoción a `references/`.
+  `CLAUDE.md` se recorta a comandos, arquitectura de `skillcheck` y reglas del
+  validador, y remite al README para el propósito. Arranca la migración hacia
+  `2.0.0`, que se declara cuando el resto de los TODOs de la migración estén
+  cerrados.
+
 ## [1.6.1] - 2026-08-28
 
 ### Corregido
