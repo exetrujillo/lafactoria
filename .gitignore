@@ -37,3 +37,16 @@ __pycache__/
 
 # Artefactos de experimentos (crudos y ledgers, no se versionan)
 /experimentos/
+
+# Vivencias locales de cada skill: ajustes, índice y registro de uso de este usuario.
+# Nacen acá; sólo lo confirmado y anonimizado se promueve a references/ y se versiona.
+skills/*/vivencias/
+
+# forjador es la única copia instalada que este repo versiona como bootstrap
+# (ver reglas de arriba), pero sus vivencias siguen sin versionarse igual que
+# las de cualquier otra skill.
+.claude/skills/forjador/vivencias/
+
+# Marcador que `skillcheck install` deja en la copia instalada con la ruta
+# absoluta de la fuente. Es local a cada máquina.
+.factoria-origen

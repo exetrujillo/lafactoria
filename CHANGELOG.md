@@ -2,21 +2,22 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.8.0] - 2026-08-29
+
+### Cambiado
+
+- `forjador` mueve el patrón de compuerta y la auditoría de lógica del cuerpo fijo de su `SKILL.md` a `references/patron-compuerta.md` y `references/auditoria-logica.md`, con punteros condicionales en vez de texto que se carga en cada corrida.
+- `CLAUDE.md` refleja que `forjador` permite varias rondas de preguntas, sin repetirlas salvo ambigüedad real, y la sección "Reglas que aplica skillcheck" de `forjador` incorpora las tres reglas que le faltaban frente a `src/main.rs`: frontmatter delimitado, formato/longitud de `name` y límite de `description`.
+
+### Agregado
+
+- `forjador` scaffoldea `vivencias/` al nombrar una skill nueva y, cuando esa skill declara claves propias de `ajustes.json`, le escribe un validador en Rust sin dependencias. Primera instancia real: `skills/forjador/vivencias/`, con un ajuste de registro de lenguaje del propio usuario.
+
 ## [1.7.0] - 2026-08-29
 
 ### Cambiado
 
-- `README.md` reescrito como fuente de verdad del sentido del repositorio:
-  cuatro principios de diseño (vivencias que no se destruyen, lo que varía por
-  usuario no se versiona, neutralidad entre arneses, economía de contexto),
-  el ecosistema de relaciones entre skills (autointeracción, uso, estudio,
-  herencia, crianza), el criterio de qué entra y qué no como skill nueva, el
-  ciclo de vida completo (nacer, iterar, publicar, versionar, retirar) y el
-  esquema de `vivencias/` con su ciclo de promoción a `references/`.
-  `CLAUDE.md` se recorta a comandos, arquitectura de `skillcheck` y reglas del
-  validador, y remite al README para el propósito. Arranca la migración hacia
-  `2.0.0`, que se declara cuando el resto de los TODOs de la migración estén
-  cerrados.
+- `README.md` reescrito como fuente de verdad del sentido del repositorio: cuatro principios de diseño (vivencias que no se destruyen, lo que varía por usuario no se versiona, neutralidad entre arneses, economía de contexto), el ecosistema de relaciones entre skills (autointeracción, uso, estudio, herencia, crianza), el criterio de qué entra y qué no como skill nueva, el ciclo de vida completo (nacer, iterar, publicar, versionar, retirar) y el esquema de `vivencias/` con su ciclo de promoción a `references/`. `CLAUDE.md` se recorta a comandos, arquitectura de `skillcheck` y reglas del validador, y remite al README para el propósito. Arranca la migración hacia `2.0.0`, que se declara cuando el resto de los TODOs de la migración estén cerrados.
 
 ## [1.6.1] - 2026-08-28
 

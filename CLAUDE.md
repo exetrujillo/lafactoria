@@ -65,9 +65,9 @@ fuente y se niega a instalar si hay errores.
   idéntico al nombre del directorio que la contiene y cumplir el formato de
   OpenCode (`^[a-z0-9]+(-[a-z0-9]+)*$`, máximo 64 caracteres).
 - `skills/forjador/SKILL.md` — skill maestra: orquesta la creación de nuevas
-  skills (una sola tanda de preguntas, sin repetir rondas), las valida
-  y las instala, y documenta explícitamente las reglas que aplica
-  `skillcheck`. Si se cambia una regla de validación en `src/main.rs`,
+  skills (una o varias rondas de preguntas, sin repetirlas salvo ambigüedad
+  real), las valida y las instala, y documenta explícitamente las reglas que
+  aplica `skillcheck`. Si se cambia una regla de validación en `src/main.rs`,
   actualizar esa sección también para que no queden desalineadas.
 
 ## Convenciones de código
