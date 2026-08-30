@@ -2,6 +2,17 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.10.0] - 2026-08-30
+
+### Agregado
+
+- `forjador/SKILL.md` documenta la convención de copiar `json_util.rs` tal cual a cada skill nueva, cómo declarar `familia`/`criados` recíprocos, y que `version` en `ajustes.json` es el número de esquema del contrato (no la versión de la skill ni del ecosistema) — incluida la disciplina de migrar el propio `ajustes.json` de forjador en la misma edición en que sube su `ESQUEMA_ESPERADO`, para no autobloquearse.
+- El validador de vivencias de `forjador` compara `version` contra un `ESQUEMA_ESPERADO` fijo y usa el lector de JSON compartido extraído a `json_util.rs`.
+
+### Cambiado
+
+- El paso 7 de `forjador/SKILL.md` refleja que `install` ya corre el gate de vivencias antes de copiar (implementado en `main.rs` en 1.9.0, pendiente de documentar acá).
+
 ## [1.9.0] - 2026-08-30
 
 ### Agregado

@@ -89,6 +89,54 @@ validador de vivencias en `scripts/`, en Rust y sin dependencias externas
 `ajustes.json` real tiene las llaves balanceadas, las claves declaradas y sus
 tipos coinciden. No valida contenido de negocio, solo la forma del archivo.
 
+No reescribas a mano el lector de JSON: copia `skills/forjador/scripts/json_util.rs`
+tal cual al `scripts/` de la skill nueva y agrégale un `include!("json_util.rs");`
+al `validar_ajustes.rs` (mismo patrón en las cinco skills existentes con
+validador). Es una copia deliberada, no un módulo compartido en `src/`: cada
+skill viaja sola cuando se instala `--global` en otro proyecto, así que su
+`scripts/` tiene que alcanzarle sin depender de nada fuera de
+`skills/<nombre>/`. Si `json_util.rs` gana una función nueva, propagala a las
+demás copias en la misma edición.
+
+Si el cuerpo declara **herencia** o **crianza** de otra skill (una sección de
+tipo "Skills madre", "hereda de..." — ver "El ecosistema" en el README para la
+distinción), escribe o actualiza también la clave `familia` en
+`vivencias/ajustes.json`, con un objeto por relación (`skill`, `relacion`,
+`desde`; formato y ejemplo en la sección "Vivencias" del README). `desde` es
+la fecha de esta edición, no una fecha histórica que no se pueda verificar. No
+declares acá una relación de uso, estudio o autointeracción: esas no llevan
+`familia` (ver README para el motivo).
+
+Si la relación es **crianza**, además escribe la entrada recíproca en la clave
+`criados` del `ajustes.json` de cada padre declarado (`skill`, `desde`, sin
+`relacion` porque `criados` es solo para crianza). Esto implica tocar el
+`ajustes.json` de una skill distinta a la que estás editando: hacelo en la
+misma sesión, con la misma fecha en `desde`. La herencia no lleva reciprocidad.
+
+Si la skill (hija o padre) ya tenía un validador de vivencias, extiende sus
+comprobaciones para cubrir también la forma de `familia` y/o `criados` según
+corresponda (mismo patrón: presencia del arreglo, y que cada objeto tenga sus
+claves de texto).
+
+`version` en `ajustes.json` es el número de esquema del contrato
+`ajustes`/`familia`/`criados` de esa skill (ver "Vivencias" en el README), no
+la versión de la skill ni la del ecosistema. `forjador` es quien sube el
+`ESQUEMA_ESPERADO` del `validar_ajustes.rs` de una skill cuando una edición
+cambia el **significado** de una clave existente (no solo agrega o quita
+claves, que ya cubre la comprobación de forma existente). El mensaje de error
+de esa comparación tiene que ser autosuficiente — qué cambió y qué clave de
+`ajustes.json` revisar — para que cualquier agente, no solo uno que invoque
+`forjador`, pueda arreglar el archivo a mano.
+
+Si el cambio de esquema es al propio `vivencias/ajustes.json` de `forjador`,
+migralo en la **misma edición** en que subís su `ESQUEMA_ESPERADO` — mismo
+criterio que la reciprocidad `familia`/`criados` de más arriba. Si no, la
+skill queda autobloqueada sin salida: la copia instalada de `forjador`
+todavía no conoce el cambio nuevo (vive sin instalar en la fuente, bloqueada
+por su propio gate), así que no hay forma de invocarlo para que ayude a
+migrarse a sí mismo. Con cualquier otra skill esto no pasa, porque `forjador`
+sigue instalado y disponible mientras la migra.
+
 ## 4. Validar
 
 Una sola corrida por iteración, desde la raíz del repo:
@@ -125,10 +173,13 @@ escrituras; no vuelvas a correr `skillcheck` si no cambiaste el archivo.
 ## 7. Instalar (publicar la skill terminada)
 
 `skillcheck` valida la skill de nuevo antes de instalarla y se niega a
-instalar si quedan errores. Hoy `install` copia `vivencias/` tal cual a la
-copia instalada, sin correr el validador de vivencias del paso 3 antes de
-copiar: esa integración es un TODO pendiente en `HANDOFF.md`, no algo que
-`skillcheck` haga todavía.
+instalar si quedan errores. Si la skill declaró `scripts/validar_ajustes.rs`
+(paso 3) y ya existe `vivencias/ajustes.json` en la fuente, `install` compila
+ese validador con `rustc` y lo corre contra el `ajustes.json` real antes de
+copiar; un validador que falla aborta la instalación con el mismo criterio
+que un error de `lint`. Si falta cualquiera de los dos archivos (skill sin
+validador propio, o vivencias todavía no creadas en un clon fresco), `install`
+no valida nada y sigue de largo.
 
 ```sh
 cargo run --quiet -- install <nombre>            # solo este proyecto: .claude/skills/<nombre>
