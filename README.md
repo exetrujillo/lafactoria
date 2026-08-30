@@ -2,37 +2,33 @@
 
 Las skills son habilidades que los agentes de IA pueden usar para realizar
 tareas y que guardamos en un archivo `SKILL.md` para no tener que escribir la
-instrucción completa cada vez que las usamos. Escritas sueltas se degradan, se
-duplican entre proyectos, se contradicen, envejecen sin que nadie lo note y
-nadie sabe cuál es la versión buena. La Factoría es una librería de skills y una
+instrucción completa cada vez que las usamos. La Factoría es una librería de skills y una
 fábrica de skills al mismo tiempo, es el taller donde se escriben, se validan, se
 versionan y se retiran con cierta lógica del repositorio.
 
-El flujo de trabajo principal es conversacional. Las skills se escriben, validan
+El flujo principal es conversacional. Las skills se escriben, validan
 e instalan hablando con un agente, apoyándose en **`/forjador`**, la skill
 maestra del repositorio que se encarga de generar, validar e instalar las
-skills. Editar un `SKILL.md` a mano es igualmente legítimo; simplemente no es el
-camino principal.
+skills.
 
-Este documento define el sentido del repositorio. Para los comandos, la
-arquitectura de `skillcheck` y las reglas del validador, ver `CLAUDE.md`.
+Este documento define el sentido del repositorio. Para comandos, arquitectura del `skillcheck` y reglas del validador, ver `CLAUDE.md`.
 
 ## Principios
 
 Cuatro decisiones de diseño que rigen todo lo que se escribe acá.
 
-**1. Las skills tienen vivencias, y esas vivencias no se destruyen.** Como
+**1. Las skills tienen vivencias que no se destruyen.** Como
 `forjador`, hay otras skills principales de este repo que son, al mismo
 tiempo, herramientas para crear skills. Es por esta dinámica de interacción
 entre herramientas (para desarrollarse a sí mismas y desarrollar otras) que
-necesitan guardar vivencias propias: bitácoras, archivos de estado o
+necesitan guardar vivencias propias: bitácoras, archivos de estado, dependencias o
 información de contexto. Ninguna skill puede corromper ni eliminar ese
 material sin permiso del usuario. Ante la duda, se pregunta.
 
 **2. Lo que varía de usuario a usuario no se versiona.** Si una skill tiene
-referencias a cómo maneja datos, búsquedas o cualquier otra cosa que cambia de
+referencias sobre cómo maneja datos, búsquedas o cualquier otra cosa que cambia de
 usuario a usuario, eso debe vivir en un lugar no versionado, dentro del
-`.gitignore`, para no contaminar el repositorio con los detalles de uso de cada
+`.gitignore` para no contaminar el repositorio con los detalles de uso de cada
 quien. Por el contrario, los `SKILL.md` y los archivos auxiliares que necesitan
 deben estar versionados para que el repositorio sea reproducible y las skills
 puedan compartirse.
@@ -66,10 +62,10 @@ propias debilidades.
 
 **Uso.** Una skill llama a otra dentro de su propio proceso, para un fin que es
 suyo. Por ejemplo, `forjador` podría llamar a `la-quinta-pata` para buscar
-fallas en la lógica de un plan antes de que este se ejecute.
+fallas en la lógica de un plan de creación de nueva skill antes de que este se ejecute.
 
 **Estudio.** Una skill se usa *por sobre* otra, no para usarla dentro de un
-proceso sino con el fin de estudiarla o modificarla. Es lo que se hizo con
+proceso sino con el fin de estudiarla y/o modificarla. Es lo que se hizo con
 `prueba-y-error` (que busca aplicar el método científico en bucles iterativos de
 experimentos) por sobre `biblio-rata`, la skill que indexa documentos en una
 estructura consultable para no gastar tokens leyendo PDFs enteros. Al estudiarla
@@ -87,9 +83,9 @@ Aunque exista una vida independiente de la skill respecto de los nodos que le
 entregan conocimientos, probablemente necesite seguir consultando a sus padres
 especializados ante bugs, alucinaciones y casos límite. No es una subcategoría
 de herencia: una skill hereda de una fuente y muta esa lógica para su propio
-caso, mientras que cría cuando depende de varias skills completas a la vez,
-sin absorber su lógica. Ambas relaciones pueden combinarse en la misma skill,
-pero son categorías distintas.
+caso, mientras que existe relación de crianza cuando depende de varias skills
+a la vez sin absorber su lógica. Ambas relaciones pueden combinarse en la misma
+skill, pero son categorías distintas.
 
 En general estas no son categorías o relaciones excluyentes, de hecho la idea es que
 no lo sean y que puedas probar combinaciones según necesites. Las **dependencias** de
@@ -178,10 +174,17 @@ entero siempre, así que se mantiene corto; si crece hasta volverse un método
 distinto, ya no es un ajuste y corresponde una skill nueva. Las claves las define
 cada skill en su `SKILL.md`.
 
+La `version` dentro de `ajustes.json` **no** es la versión de la skill ni del
+ecosistema (esa la lleva `CHANGELOG.md`): es el número de esquema del contrato
+`ajustes`/`familia`/`criados` de esa skill. Sube solo cuando cambia la forma o el
+significado de una de esas claves — nunca por un bump del ecosistema ni por una
+edición de texto del `SKILL.md` que no toque el contrato. `actualizado` sigue
+cubriendo la fecha del último toque, sin cambiar de rol.
+
 ```json
 {
   "skill": "chatarrero",
-  "version": "1.3.4",
+  "version": "1",
   "actualizado": "2026-08-29",
   "ajustes": { "pausa_entre_pedidos_s": 8, "navegador_por_defecto": "nodriver" },
   "notas": ["Los sitios con WAF agresivo exigen UA de navegador real"]
@@ -191,6 +194,63 @@ cada skill en su `SKILL.md`.
 Los ajustes pueden cambiar valores por defecto, umbrales y preferencias, y
 agregar contexto. **No** pueden anular las comprobaciones de seguridad de la
 skill ni el principio de no destruir sus vivencias.
+
+**`familia`** es una clave opcional al mismo nivel que `ajustes` y `notas`: solo
+existe si la skill declara **herencia** o **crianza** de otra (ver "El
+ecosistema"). Deliberadamente no cubre **uso**, **estudio** ni
+**autointeracción**: esas son interacciones puntuales dentro de un proceso o
+de una sesión, no un acoplamiento estructural que alguien necesite ver de un
+vistazo en `ajustes.json` — si una de ellas deja una marca significativa, tiene
+su lugar en `vivencias/registro/`, no acá. Es una lista de objetos, uno por
+relación:
+
+```json
+{
+  "skill": "pulpo-librero",
+  "version": "1",
+  "actualizado": "2026-08-29",
+  "ajustes": { "max_files": 100 },
+  "notas": [],
+  "familia": [
+    { "skill": "chatarrero", "relacion": "crianza", "desde": "2026-08-30" },
+    { "skill": "biblio-rata", "relacion": "crianza", "desde": "2026-08-30" }
+  ]
+}
+```
+
+En `familia`, `relacion` es `herencia` o `crianza`, y `desde` es la fecha en la
+que la relación quedó registrada acá. Esta clave la escribe `forjador` cuando
+crea o edita una skill que declara una de estas dos dependencias; es metadata
+estructural sobre con quién se relaciona la skill, no una preferencia de este
+usuario, por eso vive aparte de `ajustes`. Si el `SKILL.md` cambia de qué
+depende, `familia` puede quedar desactualizada hasta la próxima edición con
+`forjador` — no hay una comprobación automática que la sincronice, y no se ha
+creído necesario agregarla mientras solo exista un par de casos reales.
+
+Herencia y crianza no son lo mismo puertas adentro de este campo, aunque
+compartan forma: **herencia** es una foto fija del momento del fork — el hijo
+absorbió y mutó la lógica del padre y a partir de ahí evoluciona
+independiente, así que si algo falla en el hijo puede valer la pena revisar qué
+asumía el padre en esa foto. **Crianza** es un acoplamiento vivo — el hijo
+puede seguir consultando al padre en cada corrida, así que un cambio en el padre
+**hoy** puede romper al hijo, no solo en el momento en que se declaró la
+relación.
+
+Por esa diferencia, solo **crianza** es recíproca. Cuando una skill declara
+`familia` con `relacion: crianza` hacia un padre, ese padre recibe a su vez una
+entrada en su propia clave `criados` (sin repetir `relacion`, porque `criados`
+sólo existe para crianza):
+
+```json
+{ "skill": "chatarrero", "version": "1", "...": "...",
+  "criados": [ { "skill": "pulpo-librero", "desde": "2026-08-30" } ] }
+```
+
+Así un padre puede ver de un vistazo a quién podría afectar antes de cambiar su
+comportamiento, sin tener que buscar en el `familia` de cada skill del repo.
+Herencia no lleva reciprocidad: el hijo ya se independizó del padre, así que
+no hay el mismo riesgo vivo que justifique que el padre lleve la cuenta de
+quién heredó de él.
 
 **`INDICE.md`** es la puerta de entrada al registro: una línea por entrada, con
 formato fijo y sin prosa (`fecha | tema | resultado en pocas palabras |

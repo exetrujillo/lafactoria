@@ -2,6 +2,18 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.9.0] - 2026-08-30
+
+### Agregado
+
+- `install` corre un gate de vivencias antes de copiar una skill: si la fuente tiene tanto `scripts/validar_ajustes.rs` como `vivencias/ajustes.json`, compila el validador con `rustc -O` y lo ejecuta contra ese `ajustes.json`, abortando la instalación con el mismo criterio que un error de `lint` si falla. Si falta cualquiera de los dos archivos, no valida nada y sigue de largo.
+- `install` escribe `.factoria-origen` en la copia instalada con la ruta canónica de la skill fuente, después de verificar que la copia es idéntica a la fuente, para que una skill pueda ubicar su propia fuente sin depender de la copia efímera.
+- README: documenta `familia` y su reciprocidad `criados` en `vivencias/ajustes.json` — `herencia` es una foto fija del fork, `crianza` es un acoplamiento vivo y por eso es la única que registra la relación inversa en el padre.
+
+### Corregido
+
+- `copy_dir_recursive` y `directories_equal` ignoran `__pycache__` al copiar e instalar una skill, en vez de fallar la comparación byte a byte por una caché de Python que no debería viajar a la copia instalada.
+
 ## [1.8.0] - 2026-08-29
 
 ### Cambiado

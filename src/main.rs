@@ -1,7 +1,7 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::exit;
+use std::process::{exit, Command};
 
 const MAX_DESCRIPTION_LEN: usize = 1024;
 const MAX_NAME_LEN: usize = 64;
@@ -263,6 +263,9 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
+        if entry.file_name() == "__pycache__" {
+            continue;
+        }
         let dest_path = dst.join(entry.file_name());
         if entry.file_type()?.is_dir() {
             copy_dir_recursive(&entry.path(), &dest_path)?;
@@ -274,7 +277,10 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
 }
 
 fn directories_equal(src: &Path, dst: &Path) -> std::io::Result<bool> {
-    let mut src_entries: Vec<_> = fs::read_dir(src)?.filter_map(Result::ok).collect();
+    let mut src_entries: Vec<_> = fs::read_dir(src)?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name() != "__pycache__")
+        .collect();
     let mut dst_entries: Vec<_> = fs::read_dir(dst)?.filter_map(Result::ok).collect();
     src_entries.sort_by_key(|entry| entry.file_name());
     dst_entries.sort_by_key(|entry| entry.file_name());
@@ -301,6 +307,44 @@ fn directories_equal(src: &Path, dst: &Path) -> std::io::Result<bool> {
     Ok(true)
 }
 
+// Convención de las skills con vivencias propias (ver "Vivencias" en el
+// README): un validador fijo en `scripts/validar_ajustes.rs`, en Rust y sin
+// dependencias externas, que se compila al vuelo con `rustc` y se corre
+// contra `vivencias/ajustes.json`. Si la skill no declaró ese validador, o
+// `vivencias/ajustes.json` todavía no existe (no está versionado, así que en
+// un clon fresco es legítimo que falte), no hay nada que validar.
+fn validate_vivencias(source: &Path, name: &str) -> Result<(), String> {
+    let validador = source.join("scripts").join("validar_ajustes.rs");
+    let ajustes = source.join("vivencias").join("ajustes.json");
+    if !validador.is_file() || !ajustes.is_file() {
+        return Ok(());
+    }
+
+    let binario = env::temp_dir().join(format!("skillcheck-validar-{name}"));
+    let compilacion = Command::new("rustc")
+        .args(["-O", "-o"])
+        .arg(&binario)
+        .arg(&validador)
+        .output()
+        .map_err(|e| format!("no se pudo ejecutar rustc: {e}"))?;
+    if !compilacion.status.success() {
+        return Err(format!(
+            "no compiló {}:\n{}",
+            validador.display(),
+            String::from_utf8_lossy(&compilacion.stderr)
+        ));
+    }
+
+    let corrida = Command::new(&binario)
+        .arg(&ajustes)
+        .output()
+        .map_err(|e| format!("no se pudo ejecutar '{}': {e}", binario.display()))?;
+    if !corrida.status.success() {
+        return Err(String::from_utf8_lossy(&corrida.stderr).into_owned());
+    }
+    Ok(())
+}
+
 fn run_install(name: &str, global: bool) {
     let source = PathBuf::from("skills").join(name);
     if !source.is_dir() {
@@ -316,6 +360,10 @@ fn run_install(name: &str, global: bool) {
             println!("error: {e}");
         }
         eprintln!("error: la skill '{name}' tiene errores; corrígelos antes de instalarla");
+        exit(1);
+    }
+    if let Err(e) = validate_vivencias(&source, name) {
+        eprintln!("error: el validador de vivencias de '{name}' falló:\n{e}");
         exit(1);
     }
 
@@ -352,6 +400,17 @@ fn run_install(name: &str, global: bool) {
             eprintln!("error: no se pudo verificar la copia instalada: {e}");
             exit(1);
         }
+    }
+
+    // La copia instalada es la que leen los agentes, pero `install` la reemplaza
+    // entera en cada corrida. Dejar acá la ruta de la fuente permite que una skill
+    // escriba su memoria en `skills/<nombre>/memoria/`, que sí sobrevive, en vez de
+    // en esta copia, que es efímera. Se escribe después de `directories_equal` para
+    // no romper la verificación de que la copia es idéntica a la fuente.
+    let origen = fs::canonicalize(&source).unwrap_or_else(|_| source.clone());
+    let marcador = dest.join(".factoria-origen");
+    if let Err(e) = fs::write(&marcador, format!("{}\n", origen.display())) {
+        eprintln!("aviso: no se pudo escribir '{}': {e}", marcador.display());
     }
 
     let alcance = if global { "global (disponible en todos los proyectos)" } else { "de este proyecto" };

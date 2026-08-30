@@ -55,6 +55,15 @@ fuente y se niega a instalar si hay errores.
   `.claude/skills/<nombre>` (proyecto) o `$HOME/.claude/skills/<nombre>`
   (`--global`), reemplazando el destino si ya existe. Después de copiar,
   `directories_equal` compara ambos árboles byte a byte y aborta si difieren.
+- Antes de copiar, `validate_vivencias` corre el gate de vivencias: si la
+  fuente tiene tanto `scripts/validar_ajustes.rs` como `vivencias/ajustes.json`,
+  los compila con `rustc -O` a un binario temporal y lo ejecuta contra ese
+  `ajustes.json`; si falla, `install` aborta con el mismo criterio que un
+  error de `lint`. Es una convención fija (nombre de archivo, lenguaje Rust),
+  no un mecanismo genérico para validadores en cualquier lenguaje. Si falta
+  cualquiera de los dos archivos, no valida nada y sigue de largo — cubre
+  tanto la skill sin validador propio como un clon fresco sin `vivencias/`
+  todavía (no está versionada).
 - Terminada esa verificación, `run_install` escribe `.factoria-origen` en la
   copia instalada (para qué sirve este marcador, ver "Memoria" en el
   README). **Se escribe después de `directories_equal` a propósito**:
