@@ -64,19 +64,23 @@ ejecutor no interpreta; el selector no opina.
 
 ### Contrato de cada nodo
 
-**0. Contrato** · ejecuta: el usuario y el LLM, juntos, una sola vez.
-Recibe la pregunta que se quiere responder. Produce `contrato.md` con objetivo,
-métrica primaria (una sola), umbral de relevancia, presupuesto (corridas, tiempo,
-y consultas al banco), protocolo de control y criterio de parada. Al ledger: el
-hash del contrato, que encabeza todas las líneas siguientes. **Se congela**: si
-cambia, cambia el hash y empieza otro experimento.
+**0. Contrato** · ejecuta: el usuario y el LLM, juntos, una sola vez. Se
+congela y no se toca.
+Recibe la pregunta que se quiere responder. Produce `contrato.md` con las
+secciones obligatorias `## Objetivo`, `## Métrica primaria`,
+`## Traducción a la decisión`, `## Umbral de relevancia`, `## Presupuesto`,
+`## Protocolo de control` y `## Criterio de parada`, todas con contenido. Si
+el instrumento de medición es parte de lo que se va a modificar, aquí entra
+además el hash del banco congelado. Al ledger: el hash del contrato, que
+encabeza todas las líneas siguientes. **Se congela**: si cambia, cambia el
+hash y empieza otro experimento.
 
-Antes de avanzar, `scripts/verificar_contrato.py` exige encabezados no vacíos y
-campos ejecutables para
-objetivo, métrica primaria, traducción de la métrica a la decisión, umbral,
-presupuesto, control y parada. `scripts/ledger.py` calcula el hash, conserva el
-linaje con `hash_contrato_anterior` y `check` impide que un resultado se apoye en
-un plan huérfano.
+Antes de avanzar, `scripts/verificar_contrato.py` rechaza las secciones que
+falten, estén vacías o carezcan de unidad, umbral numérico, límites de
+presupuesto, entrada/salida del protocolo y criterio de parada ejecutable.
+`scripts/ledger.py` calcula el hash, conserva el linaje con
+`hash_contrato_anterior` y `check` impide que un resultado se apoye en un plan
+huérfano.
 
 **1. Generador** · ejecuta: el LLM.
 Recibe el contrato y el estado del ledger. Produce k candidatos, cada uno con

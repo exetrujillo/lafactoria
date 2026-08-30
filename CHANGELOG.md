@@ -2,6 +2,25 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.12.0] - 2026-08-30
+
+### Agregado
+
+- `prueba-y-error` scaffoldea `vivencias/`: sección "Vivencias propias" en su
+  `SKILL.md` (`confianza`, `remuestreos`, `alpha`) y su propio
+  `scripts/validar_ajustes.rs` con `json_util.rs`.
+
+### Cambiado
+
+- `prueba-y-error/SKILL.md` baja de 492 a 343 líneas: cuatro secciones que se
+  consultan puntualmente, no en cada corrida —fundamento bibliográfico,
+  autoaplicación del instrumento, señales de alarma y el protocolo de
+  subagentes— se mueven a `references/fundamento.md`, `autoaplicacion.md`,
+  `senales-de-alerta.md` y `subagentes.md`. La descripción de los ocho nodos,
+  que estaba duplicada entre el cuerpo y `references/grafo.md`, queda solo en
+  `grafo.md`, que ahora incluye también los headers obligatorios del
+  contrato del nodo 0.
+
 ## [1.11.0] - 2026-08-30
 
 ### Agregado

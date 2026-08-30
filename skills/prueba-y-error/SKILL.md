@@ -175,43 +175,17 @@ congela con él. No se edita para que entre una corrida nueva.
 
 ## Fundamento profesional
 
-La separación entre bloqueo, aleatorización, pareo y replicación sigue el diseño
-experimental de Box, Hunter & Hunter (pp.100-113): bloquear lo que se puede y
-aleatorizar lo que no, con replicación genuina. La fase A no debe prometer más que
-un tamiz: Hyperband formula explícitamente el compromiso entre muchos candidatos
-con poco presupuesto y pocos con mucho, y no existe una partición universalmente
-óptima (Li et al., 2018, pp.6-7). Sus garantías de halving dependen de supuestos
-sobre la evolución de la métrica, por lo que una sola observación ruidosa no
-justifica una recomendación.
-
-La selección y el análisis que se adaptan a los datos cuentan como comparaciones
-múltiples implícitas. Dwork et al. (2015, pp.1-2, 6) señalan que las hipótesis,
-variables, tests y métodos elegidos después de explorar los mismos datos no
-conservan automáticamente los niveles nominales; la salida profesional es usar
-datos frescos o particiones disjuntas, o un método de inferencia que modele la
-adaptación. La regla de parada también debe formar parte del análisis: los
-procedimientos secuenciales pueden cambiar la validez de los valores p y de los
-intervalos si se los trata como muestreos fijos (MacKay, 2003, p.476).
-
-Por eso `RECOMENDAR` requiere confirmación independiente o inferencia secuencial
-declarada. Demsar (2006, pp.8-9, 15) respalda la comparación global y el ajuste
-por múltiples comparaciones, pero ese ajuste no sustituye el control de la
-adaptación ni del momento de parada. El ledger aporta procedencia; no reemplaza
-el diseño estadístico.
-
-Como patrón de ingeniería de ciclo corto, `autoresearch` de Karpathy usa una
-corrida con presupuesto fijo, una métrica comparable, un único archivo bajo
-modificación y un registro de conservar o descartar cada cambio
-([github.com/karpathy/autoresearch](https://github.com/karpathy/autoresearch)).
-Aquí se adopta esa disciplina solo como control de comparabilidad y
-reversibilidad: la métrica, el banco, el análisis y los límites siguen siendo
-los del contrato, y una mejora en la métrica primaria no puede ocultar un costo
-o una regresión declarados como secundarios.
+Por qué cada invariante no es arbitrario —el respaldo en diseño experimental,
+comparaciones múltiples e inferencia secuencial, y la referencia a
+`autoresearch` de Karpathy— está en `references/fundamento.md`; consultarlo
+solo si hace falta justificar el diseño ante alguien, no para ejecutar el
+bucle.
 
 ## El recorrido
 
-Ocho nodos. Qué recibe, qué produce y quién ejecuta cada uno está en
-`references/grafo.md`, junto con los diagramas.
+Ocho nodos. Qué recibe, qué produce y quién ejecuta cada uno —incluidas las
+secciones obligatorias del contrato del nodo 0— está en `references/grafo.md`,
+junto con los diagramas.
 
 ### Orquestación del ciclo
 
@@ -255,121 +229,18 @@ completo se justifica sólo para auditar un fallo concreto que el parte señaló
 
 ### Ejecución aislada mediante agentes
 
-Cuando una ronda necesite trabajo que `ronda.py` no cubra, envíala a un subagente
-de bajo contexto. El agente principal conserva la orquestación, pero no vuelca al
-contexto el crudo ni ejecuta manualmente lotes mecánicos. El encargo debe incluir:
-
-- el directorio del experimento y el contrato congelado;
-- el banco y la política de selección ya declarada;
-- el presupuesto restante y los comandos exactos de validación;
-- el manifiesto `fuentes.json` con IDs de casos o consultas, igual para plan y resultado;
-- la prohibición de modificar `skills/biblio-rata/`, hacer commits o cambiar el
-  contrato/banco después de la congelación;
-- la instrucción de escribir planes antes de correr, resultados mediante
-  `ledger.py`, crudos y resumen en disco.
-
-El subagente puede crear fixtures reproducibles, ejecutar el protocolo, validar el
-ledger y redactar el informe solicitado. Si descubre un fallo, debe detenerse en
-la primera vía de triage aplicable y devolverlo sin arreglar silenciosamente una
-premisa congelada. Una corrección de instrumento abre contrato y ronda nuevos.
-
-El subagente devuelve al agente principal solo un parte breve: estado, decisión,
-ruta del informe, hash de contrato y banco, conteo de registros/evaluaciones,
-fallos de validez, comandos ejecutados y archivos modificados. El agente principal
-lee el informe y el ledger desde disco para decidir la continuidad; no reconstruye
-resultados desde la memoria del subagente ni pide el crudo salvo para auditar un
-fallo concreto.
-
-Si el parte dice **SEGUIR MIDIENDO** y el valor de información no es bajo, el
-agente principal debe lanzar otro subagente con un encargo nuevo y acotado,
-incluyendo el hallazgo anterior y la observación que falta. No debe devolver el
-control al usuario entre subagentes ni considerar el primer parte un cierre.
-
-Si hay fases o casos independientes, lánzalos en subagentes separados solo cuando
-no compartan archivos de escritura. Si comparten ledger, corpus o presupuesto,
-usa un único subagente secuencial para evitar carreras y registros intercalados.
-
-Cada subagente ejecuta como máximo una ronda, pero la orquestación puede encadenar
-tantas rondas como permita el presupuesto global. Antes de relanzar, registra por
-qué la ronda anterior no decidió, qué dato nuevo busca y qué condición hará parar.
-Si el diseño siguiente sería equivalente o no podría cambiar el veredicto, cierra
-como `SEGUIR MIDIENDO` por valor de información bajo y explica qué experimento
-futuro, con contrato distinto, sería necesario.
-
-Un ciclo puede corregir un instrumento o un error de ejecución, pero no puede
-editar retrospectivamente contrato, banco, plan ni resultado. Una corrección
-abre un linaje o una iteración nueva y deja el diagnóstico en el ledger.
-
-**0. Contrato — se congela y no se toca.** Escribe las secciones obligatorias
-`## Objetivo`, `## Métrica primaria`, `## Traducción a la decisión`,
-`## Umbral de relevancia`, `## Presupuesto`, `## Protocolo de control` y
-`## Criterio de parada`, todas con contenido. `verificar_contrato.py` rechaza las
-que falten, estén vacías o carezcan de unidad, umbral numérico, límites de
-presupuesto, entrada/salida del protocolo y criterio de parada ejecutable. Si el
-instrumento de medición es parte de lo que se va a modificar, aquí entra además el
-hash del banco congelado.
-
-**1. Generador (LLM).** Propone k candidatos, cada uno con su predicción. En fase
-A, k es grande y los candidatos baratos.
-
-**2. Diseñador (determinista).** Semillas pareadas, orden aleatorizado, entorno
-congelado y **análisis pre-declarado**. La regla de Box, Hunter & Hunter (p.112):
-bloquea lo que puedas y aleatoriza lo que no.
-
-**3. Ejecutor (sin LLM).** Corrida aislada, reproducible por hash. Escribe el
-crudo y **no lo interpreta**. Si en este punto dan ganas de mirar el resultado y
-ajustar algo, ese impulso es exactamente lo que el nodo 2 existe para bloquear.
-
-**4. Analizador (el test primero, el LLM después).** Aplica el test declarado en el
-nodo 2 y escribe el veredicto. Recién con el veredicto en el ledger el LLM puede
-leer el crudo.
-
-**5. Diagnóstico (solo si la predicción falló).** El triage del invariante 3. Para
-aislar cuál cambio produjo la diferencia, búsqueda binaria sobre el conjunto de
-cambios: aislar la diferencia es mucho más eficiente que simplificar la entrada
-(Zeller & Hildebrandt p.12). El veredicto, la vía cuando corresponde y la decisión
-del selector entran juntos con `ledger.py diagnostico`; hasta que cada resultado
-de la ronda tenga el suyo, `ronda.py` no abre la siguiente.
-
-**6. Selector (política, no el LLM).** El LLM propone, la política elige. Fase A:
-halving. Fase B: adquisición. Cuál corresponde está en `references/regimenes.md`.
-
-**7. Nodo de salida (LLM leyendo el ledger).** RECOMENDAR, SEGUIR MIDIENDO o
-ABANDONAR, con tamaño de efecto e intervalo y corrección por comparación múltiple.
-Formato y criterios de parada en `references/ledger.md`.
+Cuando una ronda necesite trabajo que `ronda.py` no cubra, delegala en un
+subagente de bajo contexto en vez de volcar el crudo al contexto principal. Qué
+incluir en el encargo, cómo encadenar rondas sin devolver el control al usuario
+y cuándo paralelizar está en `references/subagentes.md`.
 
 ## Autoaplicación: cuando el instrumento es parte de lo medido
 
 Es la trampa más fácil de pisar: calibrar una herramienta usándola como medio de
-medición, o evaluar un método con el método mismo.
-
-- **Congelar el banco de evaluación antes de tocar el objeto.** Se escribe
-  primero, se hashea, y el hash entra en el contrato del nodo 0.
-- **Nunca modificar banco e instrumento en la misma iteración.** Si el banco tiene
-  que cambiar, es otro experimento con otro contrato y los resultados anteriores
-  no se mezclan con los nuevos.
-- **La clave de respuesta se pre-declara y se coteja mecánicamente.** Si juzgar un
-  resultado exige el criterio del mismo modelo que corre el experimento, el
-  instrumento quedó contaminado por una segunda vía, distinta de la obvia.
-- **Contabilidad completa del costo.** El contrato enumera **todas** las
-  componentes, incluidos los costos fijos de adoptar la intervención, no solo los
-  variables. Omitir una no sesga el resultado: lo da vuelta. Un linaje de ocho
-  rondas recomendó una regla que se invirtió entera al sumarle el costo fijo que
-  nadie había contado (`docs/experimentos/biblio-rata-umbral.md`).
-- **Filtración de oráculo.** El instrumento no le puede pasar a la política bajo
-  prueba información que su usuario real no tendría. Si el camino de respaldo ya
-  sabe dónde está la respuesta, la validez queda garantizada por construcción y
-  los fallos de la intervención se vuelven invisibles.
-- **Ventaja de costo no es utilidad.** Un candidato que no entrega el resultado
-  siempre gana en costo. El contrato declara de antemano qué se paga cuando la
-  política falla; si no, el bucle premia justamente lo que no sirve.
-- **Una clave de cadenas mide recuperación, no corrección.** Cotejar términos
-  verifica que el texto apareció, no que la respuesta sea correcta. El reporte
-  tiene que nombrar lo que la clave no cubre.
-- **Cada consulta al banco gasta validez.** Reutilizar el mismo conjunto con un
-  proceso que se adapta a las respuestas produce sobreajuste al banco aunque nadie
-  haga trampa (Dwork et al. p.2). El presupuesto del contrato incluye **cuántas
-  veces** se puede consultar, no solo cuántas corridas se pueden hacer.
+medición, o evaluar un método con el método mismo. La checklist completa —banco
+congelado antes de tocar el objeto, contabilidad de costos, filtración de
+oráculo, y el resto— está en `references/autoaplicacion.md`; revisarla siempre
+que el objeto bajo prueba sea el propio instrumento de medición.
 
 ## Dónde viven los artefactos
 
@@ -454,24 +325,19 @@ documentación del proyecto. El ledger crudo no se versiona.
 
 ## Señales de que el bucle se soltó
 
-Auditar contra esta lista al terminar. Cada punto marcado es un invariante que el
-modelo no sostuvo por sí solo:
+Checklist de auditoría para correr al terminar cada experimento, en
+`references/senales-de-alerta.md`.
 
-- Una línea del ledger sin predicción, o con la predicción escrita después del dato.
-- El test aplicado no es el que estaba declarado antes de correr.
-- Un dato descartado sin que el triage diga por cuál de las tres vías.
-- El reporte final cita un número que no aparece en el ledger.
-- El banco cambió en la misma iteración que el instrumento.
-- Se pasó a fase B sin aplicar la regla pre-declarada del contrato.
-- Se pidió confirmación humana entre fases aunque el contrato había delegado la
-  transición en la política.
-- Se terminó una fase sin seleccionar, iterar o emitir una decisión según el
-  criterio de parada.
-- Se escribió documentación definitiva antes del informe provisional y su
-  auditoría.
-- Un rango de repeticiones deterministas se presentó como intervalo de
-  incertidumbre.
-- La identidad de un caso no coincide entre banco, ledger, crudos y reporte.
-- Rondas con instrumentos distintos se agregaron como si fueran comparables.
-- Un chequeo de robustez que por álgebra no podía cambiar el resultado se contó
-  como si lo respaldara.
+## Vivencias propias
+
+Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus defaults del
+analizador: `confianza` (0.95), `remuestreos` (10000) y `alpha` (0.05). Estos
+valores pueden cambiarse de forma estable entre experimentos; la corrección y
+el umbral siguen siendo decisiones obligatorias del experimento y no ajustes
+personales.
+
+Para validar la forma del archivo, ejecuta:
+
+```sh
+rustc scripts/validar_ajustes.rs -O -o /tmp/prueba-y-error-validar && /tmp/prueba-y-error-validar vivencias/ajustes.json
+```
