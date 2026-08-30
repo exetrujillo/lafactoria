@@ -2,6 +2,28 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.13.0] - 2026-08-30
+
+### Agregado
+
+- `chatarrero` scaffoldea `vivencias/`: sección "Vivencias propias" en su
+  `SKILL.md` (`pausa_entre_pedidos_s`, `navegador_por_defecto`, y la
+  declaración de `criados` hacia `pulpo-librero`) y su propio
+  `scripts/validar_ajustes.rs` con `json_util.rs`.
+- `scripts/sondear_browser.py` y `scripts/sondear_nodriver.py`: scripts de
+  reconocimiento puntual (nivel 4 y 5 de la cascada) para que los subagentes
+  de sondeo prueben una URL con Playwright o `nodriver` sin escribir el
+  scraper todavía.
+
+### Cambiado
+
+- `chatarrero` ya no trata un 4xx como terminal por default: antes de
+  declararlo permanente hay que agotar las rutas alternativas de la fuente y
+  la escalada que autorizó el usuario; solo un 404/410 confirmado en todas
+  las rutas, o un bloqueo por credencial faltante, sigue siendo un límite
+  real. `references/cascada.md` y las reglas no negociables del `SKILL.md`
+  quedan alineadas con este criterio.
+
 ## [1.12.0] - 2026-08-30
 
 ### Agregado
