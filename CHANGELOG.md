@@ -2,6 +2,16 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.11.0] - 2026-08-30
+
+### Agregado
+
+- `biblio-rata` scaffoldea `vivencias/`: sección "Vivencias propias" en su `SKILL.md` (`extractor_preferido`, `resultados_por_defecto`, `fragmento_tokens`, y la declaración de `criados` hacia `pulpo-librero`) y su propio `scripts/validar_ajustes.rs` con `json_util.rs`.
+
+### Corregido
+
+- `lint` compara byte a byte `scripts/json_util.rs` de cada skill contra una copia canónica embebida desde `src/json_util.rs` (`check_json_util` en `src/main.rs`), y falla si divergen. Antes, la sincronización entre las copias existentes dependía solo de que `forjador` se acordara de propagarlas "en la misma edición" — sin nada que lo verificara. `forjador/SKILL.md` documenta a `src/json_util.rs` como la única fuente de verdad y explica por qué no se puede importar como crate: cada `validar_ajustes.rs` se compila suelto con `rustc`, sin `Cargo.toml`.
+
 ## [1.10.0] - 2026-08-30
 
 ### Agregado

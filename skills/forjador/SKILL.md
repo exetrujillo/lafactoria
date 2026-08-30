@@ -89,14 +89,18 @@ validador de vivencias en `scripts/`, en Rust y sin dependencias externas
 `ajustes.json` real tiene las llaves balanceadas, las claves declaradas y sus
 tipos coinciden. No valida contenido de negocio, solo la forma del archivo.
 
-No reescribas a mano el lector de JSON: copia `skills/forjador/scripts/json_util.rs`
-tal cual al `scripts/` de la skill nueva y agrégale un `include!("json_util.rs");`
-al `validar_ajustes.rs` (mismo patrón en las cinco skills existentes con
-validador). Es una copia deliberada, no un módulo compartido en `src/`: cada
-skill viaja sola cuando se instala `--global` en otro proyecto, así que su
-`scripts/` tiene que alcanzarle sin depender de nada fuera de
-`skills/<nombre>/`. Si `json_util.rs` gana una función nueva, propagala a las
-demás copias en la misma edición.
+No reescribas a mano el lector de JSON: copia `src/json_util.rs` tal cual al
+`scripts/` de la skill nueva y agrégale un `include!("json_util.rs");` al
+`validar_ajustes.rs` (mismo patrón en las cinco skills existentes con
+validador). Es una copia deliberada, no un módulo compartido vía `use`: cada
+skill viaja sola cuando se instala `--global` en otro proyecto, y su
+`validar_ajustes.rs` se compila suelto con `rustc` sin `Cargo.toml`, así que
+no hay forma de importar un crate externo sin agregar infraestructura de
+build. `src/json_util.rs` es la única fuente de verdad; `lint` compara byte a
+byte cada `scripts/json_util.rs` contra esa copia canónica
+(`check_json_util` en `src/main.rs`) y falla si divergen, así que si
+`json_util.rs` gana una función nueva, propagala a las demás copias en la
+misma edición — `lint` avisa cuál quedó atrás, no lo hace por vos.
 
 Si el cuerpo declara **herencia** o **crianza** de otra skill (una sección de
 tipo "Skills madre", "hereda de..." — ver "El ecosistema" en el README para la

@@ -92,3 +92,32 @@ metadatos e índice embebido) o `pdftotext`. Si un script falla con `error: no
 hay con qué extraer texto de PDF`, **no instalar nada por cuenta propia**: lee
 `references/instalacion.md`, que explica las opciones y manda preguntarle al
 usuario dónde instalarlo.
+
+## Vivencias propias
+
+Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus preferencias:
+
+- `extractor_preferido` (string): extractor que se intentará usar primero,
+  `pymupdf` por defecto; si no está disponible, usa la cascada documentada.
+- `resultados_por_defecto` (number): cantidad inicial de resultados de `buscar.py`,
+  8 por defecto; amplía solo si los primeros no sirven.
+- `fragmento_tokens` (number): longitud inicial del fragmento de `buscar.py`,
+  24 por defecto; auméntala solo si el fragmento no alcanza.
+
+Aplica las dos últimas preferencias pasando `--n` y `--tokens`. Para preferir
+un extractor disponible, usa `BIBLIO_RATA_EXTRACTOR`; no instales dependencias
+por cuenta propia si el extractor elegido no está disponible.
+
+`vivencias/ajustes.json` también declara `criados`: `pulpo-librero` depende de
+`biblio-rata` en una relación de crianza (ver "Skills madre" en
+`skills/pulpo-librero/SKILL.md`), así que un cambio de comportamiento acá
+puede afectarlo hoy mismo, no solo en el momento en que se declaró la
+relación.
+
+El validador comprueba la forma del archivo, las claves declaradas y sus tipos;
+no valida contenido de negocio.
+
+```sh
+rustc scripts/validar_ajustes.rs -O -o /tmp/biblio-rata-validar
+/tmp/biblio-rata-validar vivencias/ajustes.json
+```

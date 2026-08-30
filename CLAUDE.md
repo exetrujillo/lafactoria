@@ -50,6 +50,17 @@ fuente y se niega a instalar si hay errores.
   al directorio de la skill. Al escribir instrucciones dentro de una skill,
   no usar rutas de ejemplo inventadas con esos prefijos — el linter las trata
   como referencias reales que deben existir en disco.
+- `check_json_util` compara byte a byte `scripts/json_util.rs` de cada skill
+  contra la constante `JSON_UTIL_CANONICO` (`include_str!("json_util.rs")`,
+  que embebe `src/json_util.rs` en el binario). Existe porque cada skill con
+  validador de vivencias copia ese lector de JSON tal cual, sin depender de
+  un crate compartido (ver "Escribir el SKILL.md" en `forjador/SKILL.md`
+  para el motivo); esta comprobación evita que las copias diverjan en
+  silencio. Si la skill no tiene `scripts/json_util.rs`, no hay nada que
+  comparar. Al modificar el lector de JSON, el cambio se hace en
+  `src/json_util.rs` y se propaga a mano a cada `scripts/json_util.rs`
+  existente — `lint` avisa si alguna copia quedó atrás, pero no las
+  sincroniza automáticamente.
 - `copy_dir_recursive` + `run_install` implementan `skillcheck install`: validan
   la skill, y copian (no symlink) `skills/<nombre>` completo a
   `.claude/skills/<nombre>` (proyecto) o `$HOME/.claude/skills/<nombre>`
