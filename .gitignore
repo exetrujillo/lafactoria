@@ -38,6 +38,9 @@ __pycache__/
 # Artefactos de experimentos (crudos y ledgers, no se versionan)
 /experimentos/
 
+# Cuaderno de TODOs local. Ésto es sólo lo que falta hacer acá.
+/HANDOFF.md
+
 # Vivencias locales de cada skill: ajustes, índice y registro de uso de este usuario.
 # Nacen acá; sólo lo confirmado y anonimizado se promueve a references/ y se versiona.
 skills/*/vivencias/
