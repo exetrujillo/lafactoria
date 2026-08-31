@@ -2,46 +2,35 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.14.0] - 2026-08-31
+
+### Agregado
+
+- Se publica la skill `pulpo-librero`: reúne papers y libros desde fuentes abiertas y los deja listos para el corpus de `biblio-rata`. Compone dos skills madre sin modificarlas (`chatarrero` para reconocer fuentes, `biblio-rata` para el contrato del corpus) y declara esa crianza en `vivencias/ajustes.json`.
+- El descubrimiento y la descarga son dos pasos separados. `pulpo buscar` acumula metadatos en un `catalogo.tsv` persistente en la biblioteca, con una columna de decisión (`pendiente`, `relevante`, `descartado`) y su motivo; `pulpo descargar` opera sólo sobre las filas `relevante` y omite las que ya figuran `accepted` en `manifest.tsv`. Así se puede revisar literatura sin descargar nada, y una segunda corrida no vuelve a descubrir lo ya visto.
+- La identidad de una obra se resuelve por DOI normalizado, de modo que el mismo trabajo visto en OpenAlex y arXiv comparte fila y acumula ambas procedencias. Sin DOI se usa `fuente:id` y no se fusiona automáticamente: el título o la URL no son prueba suficiente.
+- Scrapers acoplados a la interfaz de cada fuente: `scripts/openalex.rs` (descubrimiento) y `scripts/arxiv.rs` (API Atom oficial, sondeada en vivo el 2026-08-29). El descargador exige allowlist de hosts, rechaza hosts privados, revalida cada redirección y acepta un archivo sólo si el extractor puede abrirlo de verdad, no por su cabecera `%PDF-`.
+
 ## [1.13.0] - 2026-08-30
 
 ### Agregado
 
-- `chatarrero` scaffoldea `vivencias/`: sección "Vivencias propias" en su
-  `SKILL.md` (`pausa_entre_pedidos_s`, `navegador_por_defecto`, y la
-  declaración de `criados` hacia `pulpo-librero`) y su propio
-  `scripts/validar_ajustes.rs` con `json_util.rs`.
-- `scripts/sondear_browser.py` y `scripts/sondear_nodriver.py`: scripts de
-  reconocimiento puntual (nivel 4 y 5 de la cascada) para que los subagentes
-  de sondeo prueben una URL con Playwright o `nodriver` sin escribir el
-  scraper todavía.
+- `chatarrero` scaffoldea `vivencias/`: sección "Vivencias propias" en su `SKILL.md` (`pausa_entre_pedidos_s`, `navegador_por_defecto`, y la declaración de `criados` hacia `pulpo-librero`) y su propio `scripts/validar_ajustes.rs` con `json_util.rs`.
+- `scripts/sondear_browser.py` y `scripts/sondear_nodriver.py`: scripts de reconocimiento puntual (nivel 4 y 5 de la cascada) para que los subagentes de sondeo prueben una URL con Playwright o `nodriver` sin escribir el scraper todavía.
 
 ### Cambiado
 
-- `chatarrero` ya no trata un 4xx como terminal por default: antes de
-  declararlo permanente hay que agotar las rutas alternativas de la fuente y
-  la escalada que autorizó el usuario; solo un 404/410 confirmado en todas
-  las rutas, o un bloqueo por credencial faltante, sigue siendo un límite
-  real. `references/cascada.md` y las reglas no negociables del `SKILL.md`
-  quedan alineadas con este criterio.
+- `chatarrero` ya no trata un 4xx como terminal por default: antes de declararlo permanente hay que agotar las rutas alternativas de la fuente y la escalada que autorizó el usuario; solo un 404/410 confirmado en todas las rutas, o un bloqueo por credencial faltante, sigue siendo un límite real. `references/cascada.md` y las reglas no negociables del `SKILL.md` quedan alineadas con este criterio.
 
 ## [1.12.0] - 2026-08-30
 
 ### Agregado
 
-- `prueba-y-error` scaffoldea `vivencias/`: sección "Vivencias propias" en su
-  `SKILL.md` (`confianza`, `remuestreos`, `alpha`) y su propio
-  `scripts/validar_ajustes.rs` con `json_util.rs`.
+- `prueba-y-error` scaffoldea `vivencias/`: sección "Vivencias propias" en su `SKILL.md` (`confianza`, `remuestreos`, `alpha`) y su propio `scripts/validar_ajustes.rs` con `json_util.rs`.
 
 ### Cambiado
 
-- `prueba-y-error/SKILL.md` baja de 492 a 343 líneas: cuatro secciones que se
-  consultan puntualmente, no en cada corrida —fundamento bibliográfico,
-  autoaplicación del instrumento, señales de alarma y el protocolo de
-  subagentes— se mueven a `references/fundamento.md`, `autoaplicacion.md`,
-  `senales-de-alerta.md` y `subagentes.md`. La descripción de los ocho nodos,
-  que estaba duplicada entre el cuerpo y `references/grafo.md`, queda solo en
-  `grafo.md`, que ahora incluye también los headers obligatorios del
-  contrato del nodo 0.
+- `prueba-y-error/SKILL.md` baja de 492 a 343 líneas: cuatro secciones que se consultan puntualmente, no en cada corrida —fundamento bibliográfico, autoaplicación del instrumento, señales de alarma y el protocolo de subagentes— se mueven a `references/fundamento.md`, `autoaplicacion.md`, `senales-de-alerta.md` y `subagentes.md`. La descripción de los ocho nodos, que estaba duplicada entre el cuerpo y `references/grafo.md`, queda solo en `grafo.md`, que ahora incluye también los headers obligatorios del contrato del nodo 0.
 
 ## [1.11.0] - 2026-08-30
 
