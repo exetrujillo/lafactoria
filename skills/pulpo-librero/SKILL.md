@@ -126,6 +126,13 @@ búsqueda con variantes del nombre cuando corresponda y decidir en el catálogo
 qué candidatos pasan al descargador. El esquema completo está en
 `references/contrato.md`.
 
+Esas columnas salen de `open_access` y `best_oa_location`, no de la ubicación
+publicada: una obra puede estar cerrada en la editorial y abierta en un
+repositorio, y el catálogo registra la abierta. El scraper lee la respuesta con
+`scripts/json_api.rs`, copia canónica del lector de JSON anidado; si hay que
+tocarlo, se edita `src/json_api.rs` del repositorio y se propaga, porque `lint`
+compara ambas copias byte a byte.
+
 Para buscar en arXiv, compila el adaptador oficial Atom y conserva su salida
 como catálogo de candidatos:
 

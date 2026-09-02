@@ -50,17 +50,23 @@ fuente y se niega a instalar si hay errores.
   al directorio de la skill. Al escribir instrucciones dentro de una skill,
   no usar rutas de ejemplo inventadas con esos prefijos — el linter las trata
   como referencias reales que deben existir en disco.
-- `check_json_util` compara byte a byte `scripts/json_util.rs` de cada skill
-  contra la constante `JSON_UTIL_CANONICO` (`include_str!("json_util.rs")`,
-  que embebe `src/json_util.rs` en el binario). Existe porque cada skill con
-  validador de vivencias copia ese lector de JSON tal cual, sin depender de
-  un crate compartido (ver "Escribir el SKILL.md" en `forjador/SKILL.md`
-  para el motivo); esta comprobación evita que las copias diverjan en
-  silencio. Si la skill no tiene `scripts/json_util.rs`, no hay nada que
-  comparar. Al modificar el lector de JSON, el cambio se hace en
-  `src/json_util.rs` y se propaga a mano a cada `scripts/json_util.rs`
-  existente — `lint` avisa si alguna copia quedó atrás, pero no las
+- `check_copias_canonicas` recorre la tabla `COPIAS_CANONICAS` y compara byte a
+  byte cada `scripts/<nombre>` de la skill contra el archivo homónimo de `src/`
+  embebido con `include_str!`. Hoy son dos: `json_util.rs`, que usan los
+  validadores de vivencias, y `json_api.rs`, que usan los scrapers que leen
+  respuestas de API. Existe porque cada skill copia esos lectores tal cual, sin
+  depender de un crate compartido (ver "Escribir el SKILL.md" en
+  `forjador/SKILL.md` para el motivo); la comprobación evita que las copias
+  diverjan en silencio. Si la skill no tiene el archivo, no hay nada que
+  comparar. Al modificar un lector, el cambio se hace en `src/` y se propaga a
+  mano a cada copia existente — `lint` avisa si alguna quedó atrás, pero no las
   sincroniza automáticamente.
+- Los dos lectores no son intercambiables ni uno sustituye al otro:
+  `json_util.rs` comprueba presencia y tipo de claves conocidas en un
+  `ajustes.json` plano y su conteo de llaves no distingue las que están dentro
+  de un string, así que se rompe con una respuesta de API real. `json_api.rs`
+  lee JSON anidado, desescapa de verdad y exige un ámbito por consulta, para
+  que leer `is_oa` de `open_access` no pueda devolver el de `primary_location`.
 - `copy_dir_recursive` + `run_install` implementan `skillcheck install`: validan
   la skill, y copian (no symlink) `skills/<nombre>` completo a
   `.claude/skills/<nombre>` (proyecto) o `$HOME/.claude/skills/<nombre>`

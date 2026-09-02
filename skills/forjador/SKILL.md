@@ -98,9 +98,17 @@ skill viaja sola cuando se instala `--global` en otro proyecto, y su
 no hay forma de importar un crate externo sin agregar infraestructura de
 build. `src/json_util.rs` es la única fuente de verdad; `lint` compara byte a
 byte cada `scripts/json_util.rs` contra esa copia canónica
-(`check_json_util` en `src/main.rs`) y falla si divergen, así que si
+(`check_copias_canonicas` en `src/main.rs`) y falla si divergen, así que si
 `json_util.rs` gana una función nueva, propagala a las demás copias en la
 misma edición — `lint` avisa cuál quedó atrás, no lo hace por vos.
+
+Hay una segunda copia canónica con la misma mecánica, `src/json_api.rs`, para
+las skills que leen respuestas de API en vez de un `ajustes.json`. Son
+distintas a propósito: `json_util.rs` solo comprueba presencia y tipo de
+claves conocidas en un archivo plano, mientras que `json_api.rs` lee JSON
+anidado y recibe el ámbito donde buscar cada clave. Usa la que corresponda al
+problema; una skill puede copiar las dos, y `lint` valida cada una por
+separado.
 
 Si el cuerpo declara **herencia** o **crianza** de otra skill (una sección de
 tipo "Skills madre", "hereda de..." — ver "El ecosistema" en el README para la

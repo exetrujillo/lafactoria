@@ -27,6 +27,29 @@ Una ubicación registrada no garantiza que el archivo sea descargable. La
 documentación de referencia es
 `https://docs.openalex.org/how-to-use-the-api/api-overview`.
 
+El sondeo del 2026-09-01 confirmó que esta API es el nivel 0 y no necesita
+correo ni credencial: `200` con `User-Agent` identificable, sin cookies ni
+navegador. Tres cosas que sí cambian cómo se la lee:
+
+- **Los campos de acceso abierto viven en `open_access` y `best_oa_location`,
+  no sueltos en la obra.** Buscarlos por nombre sobre la respuesta entera
+  devuelve los de `primary_location`, que es la versión publicada y suele estar
+  cerrada aunque exista una copia abierta en un repositorio. Medido con
+  `W4210318887` (`doi:10.1075/scl`), que es `green` con copia en HAL: leído mal
+  daba `is_oa=false`, sin licencia y con la URL de pago como `landing_url`. Por
+  eso el scraper usa `scripts/json_api.rs`, que exige indicar el ámbito.
+- **`content_urls.pdf` no es una ruta de descarga.** El campo apareció apuntando
+  a `content.openalex.org/works/<id>.pdf`, pero pedirlo devuelve `401` sin
+  credencial. La regla de esta sección sigue en pie: OpenAlex descubre, no
+  entrega archivos.
+- **El filtro acepta varios DOI por pedido** separándolos con `|`
+  (`filter=doi:a|b|c`), hasta 50. Verificado con tres DOI en una sola consulta.
+  Es lo que hace barato resolver las ubicaciones de un catálogo entero.
+
+`abstract_inverted_index` sigue presente, así que el abstract se reconstruye
+ordenando las posiciones de cada palabra. La respuesta ahora trae también
+`meta.cost_usd` y `meta.x_query`, que no se usan.
+
 ## Internet Archive
 
 Úsalo para localizar libros y otros documentos mediante su catálogo y para

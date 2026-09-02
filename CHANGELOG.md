@@ -2,6 +2,21 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.15.0] - 2026-09-01
+
+### Agregado
+
+- `src/json_api.rs`: segunda copia canónica, un lector de JSON anidado para respuestas de API. No reemplaza a `json_util.rs` sino que cubre lo que aquel declara fuera de su alcance: cuenta llaves ignorando las que están dentro de un string, desescapa de verdad (incluidos los pares sustitutos, así que un símbolo matemático de un abstract no se pierde) y exige indicar el ámbito en cada consulta, que es lo que impide leer una clave del objeto equivocado.
+- `check_json_util` pasa a ser `check_copias_canonicas` y recorre una tabla de copias en vez de un solo archivo, así que `lint` verifica byte a byte tanto `scripts/json_util.rs` como `scripts/json_api.rs` de cada skill, con el mismo criterio y el mismo mensaje parametrizado por nombre.
+
+### Corregido
+
+- `scripts/openalex.rs` leía los campos de acceso abierto buscándolos por nombre sobre la respuesta entera, así que tomaba los de `primary_location` —la versión publicada, habitualmente cerrada— en lugar de los de `open_access` y `best_oa_location`. Medido contra la API real con `W4210318887` (`doi:10.1075/scl`), una obra `green` con copia abierta en HAL: el catálogo la registraba como `is_oa=false`, sin licencia, con la versión equivocada y con la URL de pago como `landing_url`. Son justo las columnas con las que el orquestador decide relevancia y el descargador elige a dónde ir. El scraper ahora lee cada campo en su ámbito con `json_api.rs`, ordena `pdf_urls` poniendo primero la ubicación abierta, y su salida quedó cotejada columna por columna contra el JSON crudo de una tanda de 25 obras.
+
+### Cambiado
+
+- `references/fuentes.md` incorpora la nota de sondeo de OpenAlex del 2026-09-01: el nivel 0 no pide correo ni credencial; `content_urls.pdf` apunta a `content.openalex.org` pero devuelve `401` sin credencial, de modo que la regla "descubrimiento, no descarga" sigue en pie por una razón medida y no sólo de diseño; y el filtro acepta hasta 50 DOI por pedido separados con `|`.
+
 ## [1.14.0] - 2026-08-31
 
 ### Agregado

@@ -7,11 +7,15 @@ const MAX_DESCRIPTION_LEN: usize = 1024;
 const MAX_NAME_LEN: usize = 64;
 const RESOURCE_PREFIXES: [&str; 3] = ["references/", "scripts/", "assets/"];
 
-// Copia canónica del lector de JSON que cada skill con validador de
-// vivencias copia tal cual a su propio scripts/json_util.rs (ver "Escribir
-// el SKILL.md" en forjador/SKILL.md). Vive acá, no en runtime, para que
-// lint_skill pueda comparar bytes sin ninguna otra fuente de verdad.
-const JSON_UTIL_CANONICO: &str = include_str!("json_util.rs");
+// Copias canónicas de los lectores de JSON que cada skill copia tal cual a su
+// propio scripts/ (ver "Escribir el SKILL.md" en forjador/SKILL.md). Viven acá,
+// no en runtime, para que lint_skill pueda comparar bytes sin ninguna otra
+// fuente de verdad. json_util.rs lo usa el validador de vivencias; json_api.rs,
+// los scrapers que leen respuestas de API.
+const COPIAS_CANONICAS: [(&str, &str); 2] = [
+    ("json_util.rs", include_str!("json_util.rs")),
+    ("json_api.rs", include_str!("json_api.rs")),
+];
 
 struct Frontmatter {
     name: Option<String>,
@@ -144,18 +148,20 @@ fn check_referenced_paths(skill_dir: &Path, body: &str, skill: &str, report: &mu
     }
 }
 
-fn check_json_util(skill_dir: &Path, skill: &str, report: &mut Report) {
-    let path = skill_dir.join("scripts").join("json_util.rs");
-    if !path.is_file() {
-        return;
-    }
-    match fs::read_to_string(&path) {
-        Ok(content) if content == JSON_UTIL_CANONICO => {}
-        Ok(_) => report.error(
-            skill,
-            "scripts/json_util.rs difiere de la copia canónica en src/json_util.rs; los cambios a ese lector de JSON se hacen ahí y se propagan tal cual a cada skill",
-        ),
-        Err(e) => report.error(skill, format!("no se pudo leer scripts/json_util.rs: {e}")),
+fn check_copias_canonicas(skill_dir: &Path, skill: &str, report: &mut Report) {
+    for (nombre, canonico) in COPIAS_CANONICAS {
+        let path = skill_dir.join("scripts").join(nombre);
+        if !path.is_file() {
+            continue;
+        }
+        match fs::read_to_string(&path) {
+            Ok(content) if content == canonico => {}
+            Ok(_) => report.error(
+                skill,
+                format!("scripts/{nombre} difiere de la copia canónica en src/{nombre}; los cambios a ese lector de JSON se hacen ahí y se propagan tal cual a cada skill"),
+            ),
+            Err(e) => report.error(skill, format!("no se pudo leer scripts/{nombre}: {e}")),
+        }
     }
 }
 
@@ -214,7 +220,7 @@ fn lint_skill(skill_dir: &Path, seen_names: &mut Vec<(String, String)>, report: 
         check_referenced_paths(skill_dir, body, &dir_name, report);
     }
 
-    check_json_util(skill_dir, &dir_name, report);
+    check_copias_canonicas(skill_dir, &dir_name, report);
 }
 
 fn lint_all(skills_dir: &Path) -> Report {
