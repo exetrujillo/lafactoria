@@ -2,6 +2,18 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.16.0] - 2026-09-01
+
+### Agregado
+
+- `scripts/openalex.rs` gana el subcomando `resolver`, el puente entre el catálogo de descubrimiento y la descarga que hasta ahora se cruzaba a mano. Toma del catálogo las filas que ya tienen DOI pero todavía no tienen ubicación —vengan de otro scraper, de una bibliografía que trajo el usuario o de una corrida anterior—, pregunta por sus copias abiertas y devuelve un TSV con las mismas columnas, que vuelve al catálogo con `pulpo buscar --source openalex-doi`. Con `--solo-relevante` se limita a las filas ya aprobadas.
+- El resolver agrupa hasta 50 DOI por consulta con el filtro `doi:a|b|c`, así que un catálogo entero cuesta unas pocas peticiones en vez de una por obra, y guarda el crudo de cada tanda como una línea de `{salida}.raw.jsonl`. Los DOI que OpenAlex no conoce se informan por su nombre al terminar: esa fila se queda sin ubicación en lugar de recibir una inventada.
+- `references/fuentes.md` documenta por qué el puente es OpenAlex y no Unpaywall: el sondeo del 2026-09-01 mostró que Unpaywall exige el parámetro `email` en toda llamada y rechaza los dominios de relleno con `422`, de modo que cada corrida dependería del correo real de quien la ejecuta. OpenAlex ingiere los mismos datos y responde sin credencial.
+
+### Corregido
+
+- La copia `scripts/json_api.rs` de `pulpo-librero` quedó desincronizada de `src/json_api.rs` por una línea de comentario al publicarse `1.15.0`. Se propaga la canónica, que es justamente el caso que `check_copias_canonicas` existe para detectar.
+
 ## [1.15.0] - 2026-09-01
 
 ### Agregado

@@ -50,6 +50,23 @@ navegador. Tres cosas que sí cambian cómo se la lee:
 ordenando las posiciones de cada palabra. La respuesta ahora trae también
 `meta.cost_usd` y `meta.x_query`, que no se usan.
 
+## El puente DOI → PDF
+
+Descubrir una obra y encontrarle una copia abierta son dos preguntas distintas.
+Un DOI puede llegar desde otro scraper, desde una bibliografía que trajo el
+usuario o desde una corrida vieja, sin ninguna ubicación asociada. Ese salto lo
+cubre `openalex resolver`, que consulta `works` filtrando por DOI en tandas.
+
+La fuente natural para esta pregunta sería Unpaywall, y se descartó por una
+razón medida: el 2026-09-01 su API devolvió `422` con el mensaje `"Please use
+your own email address in API calls"`. El parámetro `email` es obligatorio en
+toda llamada y rechaza los dominios de relleno, así que cada corrida exigiría un
+correo real de quien la ejecuta. OpenAlex ingiere los mismos datos de Unpaywall
+y responde sin credencial, a cambio de algo de frescura. Si alguna vez la
+diferencia de actualización importa para un corpus concreto, la salida se puede
+volver a resolver contra Unpaywall sin cambiar el contrato del catálogo: lo que
+vuelve es un TSV con las mismas columnas.
+
 ## Internet Archive
 
 Úsalo para localizar libros y otros documentos mediante su catálogo y para

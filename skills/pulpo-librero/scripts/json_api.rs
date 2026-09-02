@@ -7,7 +7,7 @@
 // dentro de un string. Una respuesta de API trae abstracts con llaves,
 // comillas escapadas y \uXXXX.
 //
-// Toda función recibe el ámbito donde buscar y sólo mira las claves de ese
+// Toda función recibe un ámbito donde buscar y sólo mirará las claves de ese
 // nivel, nunca las de un objeto anidado. Esa es la diferencia que importa:
 // leer "is_oa" de open_access no puede devolver el de primary_location.
 //

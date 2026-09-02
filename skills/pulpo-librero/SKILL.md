@@ -57,27 +57,32 @@ de acceso.
    decisiones previas. El agente orquestador inspecciona el catálogo y marca cada
    fila como `relevante` o `descartado`, siempre con un motivo; las nuevas quedan
    `pendiente`.
-5. Solo después ejecuta `scripts/pulpo.rs descargar`: opera sobre filas
+5. Si quedan filas `relevante` con DOI pero sin `pdf_url`, tiéndeles el puente
+   antes de descargar: `scripts/openalex.rs resolver` pregunta por las copias
+   abiertas de esos DOI y su salida vuelve al catálogo con `pulpo buscar`. Un DOI
+   que no aparezca en la respuesta se informa como tal; no se le inventa una
+   ubicación.
+6. Solo después ejecuta `scripts/pulpo.rs descargar`: opera sobre filas
    `relevante`, prueba primero `pdf_url` y después `landing_url`, y no repite una
    fila ya `accepted` en el manifiesto. Usa un identificador de agente y límites
    de red, escribe primero en temporal, comprueba que el archivo sea un PDF real,
    conserva la URL que funcionó y produce una línea por obra.
-6. No incorpores automáticamente un archivo que no sea PDF, esté vacío o no
+7. No incorpores automáticamente un archivo que no sea PDF, esté vacío o no
    pueda abrirse con el extractor que usa `biblio-rata`. Déjalo con un estado de
    fallo o revisión en el manifiesto y registra la causa.
-7. Separa duplicado exacto de versión distinta. El mismo hash puede evitar una
+8. Separa duplicado exacto de versión distinta. El mismo hash puede evitar una
    segunda copia; título parecido, DOI o URL por sí solos no autorizan borrar
    una edición, traducción o preprint.
-8. Si una fuente termina pidiendo login para entregar el documento, marca ese
+9. Si una fuente termina pidiendo login para entregar el documento, marca ese
    proveedor como bloqueado y no sigas intentando con él. Conserva el DOI,
    título y autores como pistas para que otros scrapers busquen una copia
    abierta en otra fuente. Esta parada es propia de pulpo-librero: no convierte
    un diagnóstico de `chatarrero` en un veto global.
-9. Consulta `biblio-rata` sobre el corpus existente y revisa si satisface los
+10. Consulta `biblio-rata` sobre el corpus existente y revisa si satisface los
    criterios del problema. Si faltan autores,
    periodos, perspectivas o tipos de fuente, formula otra ronda de búsquedas y
    repite solo los scrapers necesarios.
-10. Solo después mueve los documentos aceptados al corpus definitivo y ejecuta la
+11. Solo después mueve los documentos aceptados al corpus definitivo y ejecuta la
    indexación incremental de `biblio-rata`.
 
 ## Herramienta Rust
@@ -132,6 +137,27 @@ repositorio, y el catálogo registra la abierta. El scraper lee la respuesta con
 `scripts/json_api.rs`, copia canónica del lector de JSON anidado; si hay que
 tocarlo, se edita `src/json_api.rs` del repositorio y se propaga, porque `lint`
 compara ambas copias byte a byte.
+
+El mismo adaptador tiende el puente entre el catálogo y la descarga. `resolver`
+toma las filas que ya tienen DOI pero todavía no tienen ubicación —vengan de
+otro scraper, de una lista cerrada del usuario o de una corrida anterior— y
+pregunta por sus copias abiertas:
+
+```sh
+/tmp/pulpo-openalex resolver --catalogo /ruta/biblioteca/catalogo.tsv \
+  --out /tmp/resueltos.tsv --solo-relevante --max 200
+
+/tmp/pulpo-librero buscar --input /tmp/resueltos.tsv \
+  --dest /ruta/biblioteca --source openalex-doi
+```
+
+Agrupa hasta 50 DOI por consulta, así que resolver un catálogo entero cuesta
+unas pocas peticiones. Con `--solo-relevante` se limita a las filas ya
+aprobadas, que es lo que conviene cuando la revisión bibliográfica ya se hizo.
+Los DOI que OpenAlex no conoce se informan por su nombre al terminar: esa fila
+se queda sin ubicación y el orquestador decide si buscarla en otra fuente. La
+fusión posterior conserva `decision` y `decision_reason`, de modo que resolver
+nunca pisa el trabajo de revisión.
 
 Para buscar en arXiv, compila el adaptador oficial Atom y conserva su salida
 como catálogo de candidatos:
