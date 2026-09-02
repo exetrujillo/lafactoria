@@ -179,6 +179,29 @@ El identificador `arxiv:NNNN.NNNNNvN` y la URL del PDF conservan la versión
 encontrada. Si se desea la versión actual, quita el sufijo `vN` solo después de
 decidirlo explícitamente.
 
+Para libros, el adaptador de Internet Archive consulta el catálogo y después la
+metadata de cada ítem, que es lo único que distingue una descarga abierta de un
+préstamo controlado:
+
+```sh
+rustc scripts/internetarchive.rs -O -o /tmp/pulpo-ia
+/tmp/pulpo-ia search --query "subject:\"linguistics\"" --out /tmp/ia.tsv --rows 25
+
+# ítems concretos, sin pasar por la búsqueda
+/tmp/pulpo-ia search --id nasa_techdoc_20040171231 --out /tmp/ia.tsv
+```
+
+La consulta se restringe a `mediatype:texts` salvo que traigas el tuyo, porque
+el catálogo mezcla libros con audio y video. Cada fila declara su acceso en
+`oa_status`: `abierto` cuando hay un PDF con capa de texto, `prestamo-controlado`
+cuando el ítem está en préstamo y `sin-pdf` cuando no hay archivo aprovechable.
+Las dos últimas salen sin `pdf_url` a propósito: descártalas con ese motivo y no
+insistas, porque un ítem en préstamo responde `401` aunque exponga un PDF de
+aspecto perfectamente normal. Para las abiertas basta `--allow-host
+archive.org`, que cubre también los nodos de descarga `dn*` e `ia*`. Sin DOI, la
+identidad del catálogo queda `internetarchive:<identifier>` al pasar
+`--source internetarchive`.
+
 Los scrapers y el descargador usan `curl` del sistema para HTTP(S); no
 implementan evasión, JavaScript ni autenticación. Si `curl` no está disponible,
 informan el fallo sin instalar paquetes. Para lotes grandes, el orquestador

@@ -2,6 +2,15 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.17.0] - 2026-09-01
+
+### Agregado
+
+- `scripts/internetarchive.rs` completa `pulpo-librero`: la skill prometía cubrir libros desde su primera publicación y hasta ahora sólo tenía scrapers de papers. Consulta `advancedsearch.php` y después la metadata de cada ítem encontrado, con `--query` para buscar o `--id` para pedir identificadores concretos, y fuerza `mediatype:texts` salvo que la consulta ya traiga el suyo, porque el catálogo mezcla libros con audio y video.
+- El scraper distingue descarga abierta de préstamo controlado, que es el problema real de esta fuente y no se puede resolver desde la búsqueda: la restricción vive en la metadata del ítem. Un libro en préstamo expone igual un `Text PDF` de aspecto normal —48 MB en el caso medido— que responde `401` al pedirlo. Las filas restringidas se emiten con `oa_status=prestamo-controlado` y sin `pdf_url`, para que el orquestador las descarte con un motivo legible en vez de que la obra desaparezca sin explicación, y nunca se intenta su descarga.
+- De los formatos PDF de un ítem se aceptan sólo `Text PDF` y `Additional Text PDF`. Las variantes `ACS` y `LCP` están cifradas aunque figuren como PDF, y `JPEG-Compressed PDF` e `Image Container PDF` son el escaneo en imagen: pasarían la comprobación del descargador y quedarían indexados vacíos. La diferencia se mide sola: en `dli.ernet.286194` el escaneo pesa 335 MB y el PDF con capa de texto del mismo libro pesa 29 MB.
+- `references/fuentes.md` reemplaza su sección genérica de Internet Archive por la nota de sondeo del 2026-09-01, con los identificadores para reproducirla: el `401` del ítem restringido, el `206 application/pdf` del abierto, el ítem CC-BY cuyos únicos archivos son metadata —una licencia abierta no prueba que haya PDF— y `collection` llegando como string en un ítem y como arreglo en otro, que es para lo que existe `json_texts_or_text`.
+
 ## [1.16.0] - 2026-09-01
 
 ### Agregado

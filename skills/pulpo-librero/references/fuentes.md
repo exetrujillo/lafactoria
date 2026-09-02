@@ -69,11 +69,49 @@ vuelve es un TSV con las mismas columnas.
 
 ## Internet Archive
 
-Úsalo para localizar libros y otros documentos mediante su catálogo y para
-descargar solo archivos que la interfaz exponga como disponibles. Un registro
-puede contener varios formatos y restricciones distintas: elige un PDF abierto
-cuando exista y no confundas préstamo controlado con descarga abierta. Conserva
-el identificador del ítem y la URL de descarga como procedencia.
+Úsalo para localizar libros y otros documentos mediante su catálogo. El
+adaptador es `scripts/internetarchive.rs` y su trabajo real no es buscar sino
+distinguir descarga abierta de préstamo controlado, porque el catálogo expone
+las dos cosas con la misma apariencia.
+
+El sondeo del 2026-09-01 confirmó que esta API es el nivel 0 —`200` con HTTP
+simple, sin cookies, credencial ni navegador— y midió cuatro cosas que definen
+cómo se la lee:
+
+- **La restricción vive en la metadata del ítem, no en su lista de archivos.**
+  `2005guidetoliter00kath` tiene `access-restricted-item: "true"` y su
+  `collection` incluye `inlibrary` y `printdisabled`; expone igual un `Text PDF`
+  de 48 MB que parece descargable, y pedirlo devuelve **401** tras redirigir a
+  un nodo `dn*.eu.archive.org`. Por eso el scraper pide `/metadata/<id>` por
+  ítem en vez de confiar en la búsqueda, y por eso nunca intenta la descarga de
+  un ítem restringido.
+- **El camino feliz existe y es limpio.** `nasa_techdoc_20040171231`, sin
+  `access-restricted-item`, entrega su `Text PDF` con **206
+  `application/pdf`** desde un nodo `ia*.us.archive.org`.
+- **Una licencia abierta no prueba que haya PDF.**
+  `5c6fe374-b9c1-44a2-8444-4f92174a3a74` es CC-BY y sus únicos archivos son de
+  formato `Metadata`.
+- **`collection` viene como string cuando el ítem pertenece a una sola y como
+  arreglo cuando pertenece a varias**, verificado en los dos ítems de arriba.
+  Para eso está `json_texts_or_text` en `scripts/json_api.rs`.
+
+De los formatos PDF del ítem se aceptan sólo dos, en este orden: `Text PDF` y
+`Additional Text PDF`. El resto se descarta por motivos distintos y ninguno es
+recuperable. `ACS Encrypted PDF` y `LCP Encrypted PDF` están cifrados aunque
+figuren como PDF. `JPEG-Compressed PDF` e `Image Container PDF` son el escaneo
+en imagen: pasarían la comprobación de PDF del descargador y quedarían
+indexados vacíos, que es peor que no tenerlos. La diferencia se mide sola —en
+`dli.ernet.286194`, el `Image Container PDF` pesa 335 MB y el
+`Additional Text PDF` del mismo libro pesa 29 MB y sí entrega texto.
+
+La búsqueda fuerza `AND mediatype:texts` salvo que la consulta ya traiga un
+`mediatype` propio: sin ese filtro el catálogo devuelve audio y video mezclados
+con los libros. Los nodos de descarga (`dn*.ca.archive.org`,
+`ia*.us.archive.org`) no necesitan autorización aparte: `--allow-host
+archive.org` los cubre porque el descargador acepta el sufijo `.archive.org`.
+
+Conserva el identificador del ítem como procedencia; sin DOI, la identidad del
+catálogo queda `internetarchive:<identifier>`.
 
 ## Regla de fuentes
 
