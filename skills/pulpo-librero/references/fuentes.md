@@ -206,11 +206,11 @@ Dos cuidados:
   `/article/view/N` y el PDF cuelga de `/article/download/N/M`, con un segundo
   identificador que no se puede adivinar y hay que leer del HTML.
 - **Ojo con el síntoma.** Una landing HTML entregada por un host autorizado no
-  falla: baja con `200` y muere recién en la comprobación del extractor, así que
-  aparece como `unreadable_pdf`, que se lee como "el PDF está roto" cuando en
-  realidad nunca hubo PDF. En la tercera ronda de `espalol` fueron cinco de seis
-  fallas. Ante un `unreadable_pdf`, mirá el `content_type` de la URL antes de
-  buscar copia en otro lado: puede que la obra esté bien y falte un salto.
+  falla: baja con `200` y muere recién en la comprobación de PDF. En la tercera
+  ronda de `espalol` fueron cinco de seis fallas. Desde `1.22.0` ese caso se
+  registra como `not_a_pdf` y no como `unreadable_pdf`, así que el manifiesto ya
+  distingue "me dieron la landing" —raspá el enlace, la obra está bien— de "el
+  PDF está roto", que sí manda a buscar copia en otro lado.
 - **Repositorio no implica abierto.** En el mismo sondeo, `aaltodoc.aalto.fi`
   (DSpace) entregó sin fricción, mientras que `research.aalto.fi` (Pure), de la
   *misma universidad*, está también tras Cloudflare y devolvió el mismo "Just a

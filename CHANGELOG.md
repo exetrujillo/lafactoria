@@ -2,6 +2,17 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.22.0] - 2026-09-10
+
+### Corregido
+
+- `pulpo descargar` colapsaba en `unreadable_pdf` dos diagnósticos que su propio contrato ya describía como distintos: una respuesta que no es un PDF y un PDF que el extractor no puede abrir. `validate_pdf` los distinguía internamente —lo primero que hace es mirar si el cuerpo empieza con `%PDF-`— y después los unía en un solo estado, quedando el manifiesto en contra de lo que `references/contrato.md` promete. `PdfValidation` pasa de `Invalid` a `NotPdf` y `Unreadable`, y cada uno alimenta su estado.
+- Importa porque el caso frecuente es el que quedaba mal etiquetado. Una landing HTML servida con `200` por un host autorizado no falla en transporte: muere recién en la comprobación, y aparecía como "el extractor no pudo abrir ninguna respuesta PDF", que se lee como PDF corrupto y manda a buscar copia en otro repositorio. En la tercera ronda de `espalol` fueron cinco de seis fallas, y las cinco se arreglaban raspando el enlace de la landing. El motivo de `not_a_pdf` ahora lo dice: "suele ser la landing en vez del archivo, raspar el enlace".
+
+### Cambiado
+
+- El comentario que documenta las pausas por defecto había quedado sobre las constantes de cabeceras al publicarse `1.20.0`, describiendo la constante equivocada. Se devuelve a su lugar.
+
 ## [1.21.0] - 2026-09-10
 
 ### Agregado

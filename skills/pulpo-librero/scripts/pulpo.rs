@@ -173,7 +173,8 @@ fn run_download(args: &[String]) {
                             downloaded = true;
                             break;
                         }
-                        PdfValidation::Invalid => { non_pdf = true; unreadable_pdf = true; }
+                        PdfValidation::NotPdf => { non_pdf = true; }
+                        PdfValidation::Unreadable => { unreadable_pdf = true; }
                         PdfValidation::Unavailable => { validator_unavailable = true; }
                     }
                 }
@@ -215,7 +216,7 @@ fn run_download(args: &[String]) {
             } else if unreadable_pdf {
                 ("unreadable_pdf", "el extractor no pudo abrir ninguna respuesta PDF")
             } else if non_pdf {
-                ("not_a_pdf", "ninguna respuesta tenía formato PDF válido")
+                ("not_a_pdf", "ninguna respuesta era un PDF; suele ser la landing en vez del archivo, raspar el enlace")
             } else if challenged {
                 ("blocked_challenge", "challenge anti-bot: requiere navegador, no reintentar por HTTP")
             } else {
@@ -254,23 +255,28 @@ fn append_value(old: &str, value: &str) -> String { if old.is_empty() { value.to
 fn clean_value(value: &str) -> String { value.replace('\t', " ").replace('\n', " ").replace('\r', " ") }
 fn accepted_ids(path: &Path) -> Vec<String> { read_tsv(path).unwrap_or_default().into_iter().skip(1).filter(|row| row.get(4).map(String::as_str) == Some("accepted")).filter_map(|row| row.first().cloned()).collect() }
 
+/// `NotPdf` y `Unreadable` estaban juntos y son diagnósticos distintos: el
+/// primero es una landing HTML servida con `200` por un host autorizado —falta
+/// el salto al archivo, la obra está bien— y el segundo es un PDF de verdad que
+/// el extractor no abre. Colapsarlos hacía que el caso frecuente se leyera como
+/// el raro y mandaba a buscar copia en otro lado en vez de raspar el enlace.
 #[derive(PartialEq)]
-enum PdfValidation { Valid, Invalid, Unavailable }
+enum PdfValidation { Valid, NotPdf, Unreadable, Unavailable }
 
 enum DownloadResult { Fetched }
 
 fn validate_pdf(path: &Path) -> PdfValidation {
     if !fs::read(path).map(|bytes| bytes.starts_with(b"%PDF-")).unwrap_or(false) {
-        return PdfValidation::Invalid;
+        return PdfValidation::NotPdf;
     }
     if let Ok(status) = Command::new("pdftotext").args(["-q"]).arg(path).arg("/dev/null").status() {
-        return if status.success() { PdfValidation::Valid } else { PdfValidation::Invalid };
+        return if status.success() { PdfValidation::Valid } else { PdfValidation::Unreadable };
     }
     let script = "import sys\ntry:\n try:\n  import pymupdf\n except ImportError:\n  import fitz as pymupdf\nexcept ImportError:\n sys.exit(75)\ndoc=pymupdf.open(sys.argv[1])\ndoc.close()";
     match Command::new("python3").args(["-c", script]).arg(path).status() {
         Ok(status) if status.success() => PdfValidation::Valid,
         Ok(status) if status.code() == Some(75) => PdfValidation::Unavailable,
-        Ok(_) => PdfValidation::Invalid,
+        Ok(_) => PdfValidation::Unreadable,
         Err(_) => PdfValidation::Unavailable,
     }
 }
@@ -286,17 +292,17 @@ fn is_header(line: &str) -> bool {
 /// es la forma barata de que entreguen lo que ya ofrecen sin credenciales.
 const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 
-/// Pausas por defecto entre peticiones. La del mismo proveedor es mayor a
-/// propósito: el costo de una corrida no lo paga quien la lanza sino el
-/// servidor que la atiende, y bajar dos docenas de PDF del mismo repositorio
-/// universitario en ráfaga es la forma más rápida de que ese repositorio deje
-/// de atender a cualquiera.
 /// Cabeceras de navegador. `Accept` sigue priorizando el PDF, que es lo que
 /// esta herramienta viene a buscar; `Accept-Language` declara español porque la
 /// biblioteca es hispana y varios repositorios negocian el idioma de la landing.
 const ACCEPT: &str = "Accept: application/pdf,text/html;q=0.9,application/xhtml+xml;q=0.9,*/*;q=0.8";
 const ACCEPT_LANGUAGE: &str = "Accept-Language: es-ES,es;q=0.9,en;q=0.8";
 
+/// Pausas por defecto entre peticiones. La del mismo proveedor es mayor a
+/// propósito: el costo de una corrida no lo paga quien la lanza sino el
+/// servidor que la atiende, y bajar dos docenas de PDF del mismo repositorio
+/// universitario en ráfaga es la forma más rápida de que ese repositorio deje
+/// de atender a cualquiera.
 const PAUSA_MS: u64 = 4500;
 const PAUSA_MISMO_HOST_MS: u64 = 9000;
 
