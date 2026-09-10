@@ -122,8 +122,25 @@ El descargador exige hosts autorizados y aplica límites por defecto ajustables:
 /tmp/pulpo-librero descargar --catalogo /ruta/biblioteca/catalogo.tsv \
   --dest /ruta/biblioteca \
   --allow-host arxiv.org --max-files 100 --max-bytes 104857600 \
-  --max-total-bytes 1073741824
+  --max-total-bytes 1073741824 \
+  --pausa-ms 4500 --pausa-mismo-host-ms 9000
 ```
+
+Se presenta como un navegador corriente y descarga despacio, que es el
+comportamiento por defecto y no hace falta pedirlo: User-Agent de Chrome,
+`Accept` que prioriza el PDF, `Accept-Language: es-ES` y, al seguir una
+redirección, el `Referer` de la URL de la que viene. La pausa por defecto es de
+4,5 s entre peticiones y **9 s cuando dos seguidas van al mismo host**, porque
+el costo de una corrida no lo paga quien la lanza sino el servidor que la
+atiende. `--pausa-ms`, `--pausa-mismo-host-ms` y `--user-agent` permiten
+subirlas; conviene bajarlas solo contra un host propio.
+
+Presentarse como navegador **no es evasión y no cambia la doctrina de la
+compuerta**: un paywall, un login o un préstamo controlado siguen siendo un no
+definitivo, y un challenge anti-bot sigue siendo terminal. Es que varios
+repositorios institucionales rechazan de plano al cliente que se anuncia como
+script aunque la obra sea de lectura libre; el sondeo de ACM del 2026-09-09 dejó
+medido que contra un challenge real esto tampoco alcanza.
 
 Las redirecciones se siguen una a una solo si el host de cada destino también
 está autorizado. No se permiten hosts locales o privados. Un archivo se acepta
@@ -229,9 +246,14 @@ Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus preferencias:
 - `max_files` (number): límite predeterminado de obras procesadas por corrida.
 - `max_bytes_por_archivo` (number): tamaño máximo predeterminado de cada PDF.
 - `max_total_bytes` (number): tamaño máximo predeterminado del lote aceptado.
+- `pausa_ms` (number, opcional): pausa entre peticiones a hosts distintos.
+- `pausa_mismo_host_ms` (number, opcional): pausa entre peticiones al mismo host.
+- `user_agent` (string, opcional): con qué cliente se presenta el descargador.
 
-Pasa esos valores a `scripts/pulpo.rs` mediante `--max-files`, `--max-bytes` y
-`--max-total-bytes`. Los ajustes solo pueden reducir los límites de seguridad
+Pasa esos valores a `scripts/pulpo.rs` mediante `--max-files`, `--max-bytes`,
+`--max-total-bytes`, `--pausa-ms`, `--pausa-mismo-host-ms` y `--user-agent`. Las
+tres últimas son opcionales: si faltan, el descargador ya trae los valores
+corteses por defecto. Los ajustes solo pueden reducir los límites de seguridad
 efectivos de una corrida; no autorizan hosts, evaden bloqueos ni habilitan
 descargas restringidas.
 

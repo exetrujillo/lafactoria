@@ -71,7 +71,7 @@ fn run_search(args: &[String]) {
 fn run_download(args: &[String]) {
     let catalogo = Path::new(&args[1]);
     let dest = Path::new(&args[3]);
-    let (allowed_hosts, max_files, max_bytes, max_total_bytes) = match options(&args[4..]) {
+    let Opciones { hosts: allowed_hosts, max_files, max_bytes, max_total_bytes, pausa_ms, pausa_mismo_host_ms, user_agent } = match options(&args[4..]) {
         Ok(options) => options,
         Err(err) => { eprintln!("error: {err}"); std::process::exit(2); }
     };
@@ -103,6 +103,7 @@ fn run_download(args: &[String]) {
     let accepted = accepted_ids(&manifest);
     let mut processed = 0usize;
     let mut total_bytes = 0u64;
+    let mut ultimo_host: Option<String> = None;
     for (line_no, line) in io::BufReader::new(file).lines().enumerate() {
         let line = match line {
             Ok(line) => line,
@@ -154,8 +155,13 @@ fn run_download(args: &[String]) {
             if !allowed_url(url, &allowed_hosts) {
                 continue;
             }
-            let result = download(url, &temp_path, &allowed_hosts, max_bytes);
-            thread::sleep(Duration::from_millis(1100));
+            let actual = host(url).map(|nombre| nombre.to_ascii_lowercase());
+            if let Some(previo) = &ultimo_host {
+                let espera = if actual.as_deref() == Some(previo.as_str()) { pausa_mismo_host_ms } else { pausa_ms };
+                thread::sleep(Duration::from_millis(espera));
+            }
+            ultimo_host = actual;
+            let result = download(url, &temp_path, &allowed_hosts, max_bytes, &user_agent);
             if matches!(result, Err(ref message) if message == CHALLENGE) { challenged = true; }
             if let Ok(DownloadResult::Fetched) = result {
                 if fs::metadata(&temp_path).map(|metadata| metadata.len() > max_bytes).unwrap_or(true) {
@@ -273,11 +279,45 @@ fn is_header(line: &str) -> bool {
     line.split('\t').any(|column| matches!(column, "identity" | "decision" | "openalex_id" | "id" | "title" | "url" | "pdf_url" | "pdf_urls" | "landing_url"))
 }
 
-fn options(args: &[String]) -> Result<(Vec<String>, usize, u64, u64), String> {
+/// User-Agent de navegador corriente. No es evasión: un challenge anti-bot
+/// sigue siendo terminal (ver `is_bot_challenge`). Es que varios repositorios
+/// institucionales rechazan de plano al cliente que se anuncia como script,
+/// aunque la obra sea de lectura libre, y presentarse como un navegador normal
+/// es la forma barata de que entreguen lo que ya ofrecen sin credenciales.
+const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+
+/// Pausas por defecto entre peticiones. La del mismo proveedor es mayor a
+/// propósito: el costo de una corrida no lo paga quien la lanza sino el
+/// servidor que la atiende, y bajar dos docenas de PDF del mismo repositorio
+/// universitario en ráfaga es la forma más rápida de que ese repositorio deje
+/// de atender a cualquiera.
+/// Cabeceras de navegador. `Accept` sigue priorizando el PDF, que es lo que
+/// esta herramienta viene a buscar; `Accept-Language` declara español porque la
+/// biblioteca es hispana y varios repositorios negocian el idioma de la landing.
+const ACCEPT: &str = "Accept: application/pdf,text/html;q=0.9,application/xhtml+xml;q=0.9,*/*;q=0.8";
+const ACCEPT_LANGUAGE: &str = "Accept-Language: es-ES,es;q=0.9,en;q=0.8";
+
+const PAUSA_MS: u64 = 4500;
+const PAUSA_MISMO_HOST_MS: u64 = 9000;
+
+struct Opciones {
+    hosts: Vec<String>,
+    max_files: usize,
+    max_bytes: u64,
+    max_total_bytes: u64,
+    pausa_ms: u64,
+    pausa_mismo_host_ms: u64,
+    user_agent: String,
+}
+
+fn options(args: &[String]) -> Result<Opciones, String> {
     let mut hosts = Vec::new();
     let mut max_files = 100usize;
     let mut max_bytes = 100 * 1024 * 1024;
     let mut max_total_bytes = 1024 * 1024 * 1024;
+    let mut pausa_ms = PAUSA_MS;
+    let mut pausa_mismo_host_ms = PAUSA_MISMO_HOST_MS;
+    let mut user_agent = USER_AGENT.to_string();
     let mut i = 0;
     while i < args.len() {
         let value = |name: &str, i: &mut usize| -> Result<String, String> {
@@ -290,11 +330,15 @@ fn options(args: &[String]) -> Result<(Vec<String>, usize, u64, u64), String> {
             "--max-files" => max_files = value("--max-files", &mut i)?.parse().map_err(|_| "--max-files no es entero".to_string())?,
             "--max-bytes" => max_bytes = value("--max-bytes", &mut i)?.parse().map_err(|_| "--max-bytes no es entero".to_string())?,
             "--max-total-bytes" => max_total_bytes = value("--max-total-bytes", &mut i)?.parse().map_err(|_| "--max-total-bytes no es entero".to_string())?,
+            "--pausa-ms" => pausa_ms = value("--pausa-ms", &mut i)?.parse().map_err(|_| "--pausa-ms no es entero".to_string())?,
+            "--pausa-mismo-host-ms" => pausa_mismo_host_ms = value("--pausa-mismo-host-ms", &mut i)?.parse().map_err(|_| "--pausa-mismo-host-ms no es entero".to_string())?,
+            "--user-agent" => user_agent = value("--user-agent", &mut i)?,
             other => return Err(format!("opción desconocida: {other}")),
         }
         i += 1;
     }
-    Ok((hosts, max_files, max_bytes, max_total_bytes))
+    if user_agent.trim().is_empty() { return Err("--user-agent no puede estar vacío".to_string()); }
+    Ok(Opciones { hosts, max_files, max_bytes, max_total_bytes, pausa_ms, pausa_mismo_host_ms, user_agent })
 }
 
 fn host(url: &str) -> Option<&str> {
@@ -328,14 +372,18 @@ fn is_bot_challenge(headers: &str) -> bool {
     lower.contains("cf-mitigated: challenge") || lower.contains("server-timing: chlray")
 }
 
-fn download(url: &str, output: &Path, allowed_hosts: &[String], max_bytes: u64) -> Result<DownloadResult, String> {
+fn download(url: &str, output: &Path, allowed_hosts: &[String], max_bytes: u64, user_agent: &str) -> Result<DownloadResult, String> {
     let mut current = url.to_string();
+    let mut previa: Option<String> = None;
     for _ in 0..=5 {
         if !allowed_url(&current, allowed_hosts) { return Err("host o redirección no autorizados".to_string()); }
         let headers = output.with_extension("headers");
-        let result = Command::new("curl")
+        let mut comando = Command::new("curl");
+        comando
             .args(["--fail", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--connect-timeout", "20", "--max-time", "60", "--max-redirs", "0", "--max-filesize"])
-            .arg(max_bytes.to_string()).args(["--user-agent", "pulpo-librero/0.1", "--header", "Accept: application/pdf", "--dump-header"])
+            .arg(max_bytes.to_string()).args(["--user-agent", user_agent, "--header", ACCEPT, "--header", ACCEPT_LANGUAGE]);
+        if let Some(anterior) = &previa { comando.args(["--referer", anterior]); }
+        let result = comando.args(["--dump-header"])
             .arg(&headers).arg("--output").arg(output).arg(&current).status();
         let location = fs::read_to_string(&headers).ok().and_then(|headers| headers.lines().rev().find_map(|line| {
             if line.to_ascii_lowercase().starts_with("location:") { Some(line[9..].trim().to_string()) } else { None }
@@ -343,6 +391,7 @@ fn download(url: &str, output: &Path, allowed_hosts: &[String], max_bytes: u64) 
         if let Some(next) = location {
             let _ = fs::remove_file(output);
             let _ = fs::remove_file(&headers);
+            previa = Some(current.clone());
             current = resolve_location(&current, &next).ok_or_else(|| "redirección relativa o inválida".to_string())?;
             continue;
         }

@@ -2,6 +2,19 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.20.0] - 2026-09-10
+
+### Cambiado
+
+- `pulpo descargar` se presenta como un navegador corriente y baja despacio, por defecto y sin que haya que pedirlo. El User-Agent pasa de `pulpo-librero/0.1` a uno de Chrome, `Accept` sigue priorizando el PDF pero acepta lo que aceptaría un navegador, se declara `Accept-Language: es-ES` —la biblioteca es hispana y varios repositorios negocian el idioma de la landing— y al seguir una redirección se manda como `Referer` la URL de la que se viene, en vez de ninguna. El motivo no es evasión: varios repositorios institucionales rechazan de plano al cliente que se anuncia como script aunque la obra sea de lectura libre. Contra un challenge real esto no alcanza, y el sondeo de ACM del 2026-09-09 lo dejó medido; `blocked_challenge` sigue siendo terminal y la compuerta sigue tratando el paywall, el login y el préstamo controlado como un no definitivo.
+- La pausa entre peticiones sube de 1,1 s a 4,5 s, y a 9 s cuando dos peticiones seguidas van al mismo host, que antes no se distinguía. Además pasa a aplicarse *antes* de cada petición y no después, así la primera de la corrida no espera de arriba y la última no deja al proceso durmiendo sin motivo. El costo de una corrida no lo paga quien la lanza sino el servidor que la atiende, y bajar dos docenas de PDF del mismo repositorio universitario en ráfaga es la forma más rápida de que ese repositorio deje de atender a cualquiera.
+
+### Agregado
+
+- `--pausa-ms`, `--pausa-mismo-host-ms` y `--user-agent` en `pulpo descargar`, con sus claves opcionales `pausa_ms`, `pausa_mismo_host_ms` y `user_agent` en `vivencias/ajustes.json`, siguiendo el mismo camino que los límites de tamaño: los lee el agente y se los pasa al binario. Son opcionales a propósito, así que un `ajustes.json` escrito antes de que existieran sigue validando sin tocarlo. `--user-agent` vacío se rechaza en vez de mandar una cabecera vacía.
+- El validador de vivencias comprueba el tipo de esas tres claves solo si están presentes, distinguiendo por primera vez "clave ausente" de "clave con el tipo equivocado". Un ajuste mal tipeado se ignoraría en silencio y la corrida saldría más agresiva de lo que el usuario pidió, que es justo el error que este cambio viene a evitar.
+- `options` devuelve un struct `Opciones` en lugar de una tupla: con siete campos, la tupla dejaba de ser legible en el sitio de destructuración.
+
 ## [1.19.0] - 2026-09-10
 
 ### Agregado

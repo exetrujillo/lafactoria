@@ -9,6 +9,13 @@ include!("json_util.rs");
 // o el significado de una clave (ver "Vivencias" en el README).
 const ESQUEMA_ESPERADO: &str = "1";
 
+/// Presencia de una clave, con independencia de su tipo. `json_number` y
+/// `json_string` devuelven `None` tanto si la clave falta como si está con otro
+/// tipo, y para una clave opcional hay que distinguir los dos casos.
+fn presente(objeto: &str, key: &str) -> bool {
+    objeto.contains(&format!("\"{key}\""))
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
@@ -44,6 +51,19 @@ fn main() {
             if json_number(ajustes, key).is_none() {
                 errores.push(format!("falta la clave numérica 'ajustes.{key}'"));
             }
+        }
+        // Cortesía de red: opcionales a propósito. El descargador ya trae
+        // valores por defecto, así que un ajustes.json escrito antes de que
+        // existieran sigue siendo válido. Si la clave está, tiene que tener el
+        // tipo correcto: un ajuste mal tipeado se ignoraría en silencio y la
+        // corrida saldría más agresiva de lo que el usuario pidió.
+        for key in ["pausa_ms", "pausa_mismo_host_ms"] {
+            if presente(ajustes, key) && json_number(ajustes, key).is_none() {
+                errores.push(format!("'ajustes.{key}' existe pero no es un número"));
+            }
+        }
+        if presente(ajustes, "user_agent") && json_string(ajustes, "user_agent").is_none() {
+            errores.push("'ajustes.user_agent' existe pero no es una cadena".to_string());
         }
     }
 
