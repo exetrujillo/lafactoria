@@ -51,6 +51,11 @@ Estados:
 - `not_a_pdf`: la fuente respondió, pero el cuerpo no era un PDF.
 - `unreadable_pdf`: el cuerpo parecía PDF, pero el extractor no pudo abrirlo.
 - `limit_exceeded`: no se incorporó por alcanzar un límite de archivos o bytes.
+- `blocked_challenge`: el proveedor respondió con un challenge anti-bot
+  (Cloudflare `cf-mitigated: challenge` o `server-timing: chlray`). Es terminal
+  y distinto de `http_error`: ninguna combinación de cabeceras lo pasa, así que
+  no se reintenta por HTTP ni se prueban otras ubicaciones del mismo proveedor.
+  La salida es buscar una copia en otro host, no insistir.
 - `http_error`: todas las ubicaciones fallaron en transporte o status HTTP.
 - `failed`: fallo local al mover, registrar o calcular SHA-256.
 

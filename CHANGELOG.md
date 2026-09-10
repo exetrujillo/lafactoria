@@ -2,6 +2,18 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.19.0] - 2026-09-10
+
+### Agregado
+
+- `pulpo descargar` distingue un challenge anti-bot de un fallo HTTP corriente. `is_bot_challenge` mira las cabeceras volcadas en busca de señales específicas del challenge (`cf-mitigated: challenge`, `server-timing: chlray`) y no la mera presencia de Cloudflare, porque hay sitios servidos por Cloudflare que responden `403` por un motivo legítimo. El manifiesto gana el estado `blocked_challenge`, terminal por definición: ninguna combinación de cabeceras lo pasa, así que probar otra ubicación del mismo proveedor solo gasta cortesía. La salida es buscar copia en otro host.
+- `references/fuentes.md` incorpora la nota de sondeo de ACM Digital Library del 2026-09-09: 17 peticiones con 3 s de pausa sobre dos DOI con `is_oa=true`, y ningún nivel de `curl` funciona —ni el UA identificable con correo, ni el cookie jar tomado desde la landing, que también está bloqueada—. Queda documentado como proveedor bloqueado que no se reintenta, con el rescate por repositorio institucional como camino real.
+- `cascada.md` de `chatarrero` documenta el puente del nivel 5 al nivel 2 —cosechar la cookie `cf_clearance` con un navegador una sola vez y seguir el lote en HTTP barato— con las tres condiciones que lo hacen fallar si se ignoran: la clearance está atada al User-Agent exacto que la obtuvo, está atada a la IP y caduca. Queda como pendiente de implementar, no como capacidad disponible.
+
+### Cambiado
+
+- La compuerta de `pulpo-librero` separa el control de acceso del bloqueo técnico. Un paywall, un login o un préstamo controlado siguen siendo un no definitivo que ninguna escalada convierte en un sí; un `403` a un artículo de lectura libre es detección de bots y ahí la cascada sí corresponde. La distinción se exige resolver con evidencia —`is_oa`, `oa_status`, licencia declarada— antes de escalar, y no con intuición.
+
 ## [1.18.0] - 2026-09-10
 
 ### Agregado

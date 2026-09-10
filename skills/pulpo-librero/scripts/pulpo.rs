@@ -149,12 +149,14 @@ fn run_download(args: &[String]) {
         let mut unreadable_pdf = false;
         let mut validator_unavailable = false;
         let mut too_large = false;
+        let mut challenged = false;
         for url in &urls {
             if !allowed_url(url, &allowed_hosts) {
                 continue;
             }
             let result = download(url, &temp_path, &allowed_hosts, max_bytes);
             thread::sleep(Duration::from_millis(1100));
+            if matches!(result, Err(ref message) if message == CHALLENGE) { challenged = true; }
             if let Ok(DownloadResult::Fetched) = result {
                 if fs::metadata(&temp_path).map(|metadata| metadata.len() > max_bytes).unwrap_or(true) {
                     too_large = true;
@@ -208,6 +210,8 @@ fn run_download(args: &[String]) {
                 ("unreadable_pdf", "el extractor no pudo abrir ninguna respuesta PDF")
             } else if non_pdf {
                 ("not_a_pdf", "ninguna respuesta tenía formato PDF válido")
+            } else if challenged {
+                ("blocked_challenge", "challenge anti-bot: requiere navegador, no reintentar por HTTP")
             } else {
                 ("http_error", "ninguna ubicación respondió correctamente")
             };
@@ -309,6 +313,21 @@ fn is_private_host(hostname: &str) -> bool {
     hostname == "localhost" || hostname == "::1" || hostname == "0.0.0.0" || hostname == "169.254.169.254" || hostname.starts_with("127.") || hostname.starts_with("10.") || hostname.starts_with("192.168.") || hostname.starts_with("172.16.") || hostname.starts_with("172.17.") || hostname.starts_with("172.18.") || hostname.starts_with("172.19.") || hostname.starts_with("172.2") || hostname.starts_with("172.3")
 }
 
+/// Marca de error que distingue un challenge anti-bot de un fallo HTTP común.
+/// El challenge es terminal: ninguna combinación de headers lo pasa, así que
+/// insistir con otra ubicación del mismo proveedor solo gasta cortesía.
+const CHALLENGE: &str = "challenge anti-bot: el proveedor exige un navegador";
+
+/// Detecta un challenge de Cloudflare en las cabeceras volcadas. Solo se
+/// consultan señales específicas del challenge (`cf-mitigated: challenge`,
+/// `server-timing: chlray`), no la mera presencia de Cloudflare: hay sitios
+/// servidos por Cloudflare que responden 403 por un motivo legítimo y ese caso
+/// debe seguir siendo un `http_error` corriente.
+fn is_bot_challenge(headers: &str) -> bool {
+    let lower = headers.to_ascii_lowercase();
+    lower.contains("cf-mitigated: challenge") || lower.contains("server-timing: chlray")
+}
+
 fn download(url: &str, output: &Path, allowed_hosts: &[String], max_bytes: u64) -> Result<DownloadResult, String> {
     let mut current = url.to_string();
     for _ in 0..=5 {
@@ -327,11 +346,15 @@ fn download(url: &str, output: &Path, allowed_hosts: &[String], max_bytes: u64) 
             current = resolve_location(&current, &next).ok_or_else(|| "redirección relativa o inválida".to_string())?;
             continue;
         }
+        let dumped = fs::read_to_string(&headers).unwrap_or_default();
         let _ = fs::remove_file(&headers);
         if matches!(result, Ok(status) if status.success()) {
             return Ok(DownloadResult::Fetched);
         }
         let _ = fs::remove_file(output);
+        if is_bot_challenge(&dumped) {
+            return Err(CHALLENGE.to_string());
+        }
         return Err("fallo HTTP o de transporte".to_string());
     }
     Err("demasiadas redirecciones".to_string())

@@ -128,3 +128,52 @@ pequeña y estable para el orquestador: identificador, título, procedencia,
 identificadores bibliográficos y URLs candidatas. El scraper no decide qué
 constituye una biblioteca suficiente ni descarga indiscriminadamente todo lo que
 encuentra. Esa decisión pertenece a `pulpo-librero`.
+
+## Proveedores que exigen navegador
+
+Algunas editoriales sirven artículos de **lectura libre** detrás de un challenge
+anti-bot. La obra es abierta, pero el fetch no lo es: son dos cosas distintas y
+conviene no confundirlas al decidir si insistir.
+
+### ACM Digital Library (`dl.acm.org`) — bloqueado, no insistir
+
+Sondeo del 2026-09-09, 17 peticiones con 3 s de pausa, sobre dos DOI con
+`is_oa=true` (uno con licencia `cc-by-sa` declarada). **Ningún nivel de `curl`
+funciona.** Fallaron con `403` y un cuerpo HTML de ~5,6 KB:
+
+1. el UA de pulpo con `Accept: */*`;
+2. UA identificable con correo de contacto;
+3. lo anterior más `Referer` y `-L`;
+4. cookie jar tomado desde la landing `doi/10.1145/...` — **la landing también
+   responde 403 y no emite ninguna cookie**, así que el jar queda vacío;
+5. UA de Chrome 131 completo con `Accept-Language`, `Sec-Fetch-*` y `sec-ch-ua`,
+   probado en los dos DOI.
+
+El WAF es un **Cloudflare managed challenge**: `cf-mitigated: challenge`,
+`server-timing: chlray`, `cf-ray`, cuerpo `<title>Just a moment...</title>`. Es
+un challenge con JavaScript; ningún cliente sin motor JS lo pasa.
+
+**Contraejemplo explícito** de la nota de la bitácora de `chatarrero` que dice
+"403 sin UA de navegador → basta requests con UA de navegador". Acá no basta, y
+la diferencia se ve en la cabecera `cf-mitigated`, no en el status.
+
+El descargador detecta este caso y lo marca `blocked_challenge`, que es
+terminal. **No subas a Playwright por esto**: el costo no se justifica cuando la
+misma obra suele estar en un repositorio institucional.
+
+### La salida: repositorios institucionales
+
+Para una obra con DOI bloqueada en la editorial, el camino barato es la copia de
+repositorio. Medido en el mismo sondeo: `10.1145/3411764.3445483` se obtuvo en
+`aaltodoc.aalto.fi` (DSpace) con un simple `curl -sL`, sin cookies ni Referer —
+2.080.349 bytes, `%PDF-` verificado, texto extraíble.
+
+Dos cuidados:
+
+- OpenAlex y Unpaywall suelen traer la landing del repositorio pero con
+  `url_for_pdf` vacío. Hay que raspar la landing y extraer el enlace: en DSpace
+  es un `href` con `/bitstreams/.../download`; en Pure, `/files/NNNN/*.pdf`.
+- **Repositorio no implica abierto.** En el mismo sondeo, `aaltodoc.aalto.fi`
+  (DSpace) entregó sin fricción, mientras que `research.aalto.fi` (Pure), de la
+  *misma universidad*, está también tras Cloudflare y devolvió el mismo "Just a
+  moment...". El host se evalúa caso a caso.

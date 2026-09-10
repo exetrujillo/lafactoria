@@ -77,3 +77,44 @@ Subir aquí solo con diagnóstico: HTML grande (≥2000 chars) pero <200 chars d
 - Paginación servida desde caché de CDN del lado del sitio: el navegador no la resuelve.
 - Límites del servidor: respuestas 200 con 0 bytes que persisten en cualquier modalidad → conviene reintentar otro día antes de concluir que el dato no existe.
 - Sitios que bloquean todo menos browsers pero con robots.txt/señales que prohíben el scraping: la decisión es del dueño del proyecto, documentada, no técnica.
+
+### Puente del nivel 5 al nivel 2: cosechar la cookie de clearance
+
+Pendiente de implementar; es la evolución natural de este nivel y la que más
+ahorra en lotes grandes.
+
+El error de diseño frecuente es tratar el nivel 5 como un modo: se prende el
+navegador y **todo** el lote pasa por ahí, a decenas de segundos por ítem. No
+hace falta. Cuando Cloudflare emite un challenge y el navegador lo resuelve,
+deja una cookie de clearance (`cf_clearance`) que vale para el resto de la
+sesión. A partir de ahí, un cliente HTTP barato puede seguir descargando.
+
+El patrón, entonces, es **pagar el navegador una vez y bajar de nivel**:
+
+1. Detectar el challenge por cabecera (`cf-mitigated: challenge`,
+   `server-timing: chlray`), no por el status: un 403 a secas puede ser el caso
+   barato de "le falta User-Agent".
+2. Levantar `nodriver` headful bajo Xvfb una sola vez contra la landing del
+   dominio y dejar que resuelva el challenge.
+3. Exportar `cf_clearance` junto con el **User-Agent exacto** del navegador que
+   la obtuvo.
+4. Seguir el lote con `curl`/requests reusando esa cookie y ese UA.
+
+Tres condiciones que hacen fallar el puente si se ignoran:
+
+- **La cookie está atada al User-Agent.** Si el cliente HTTP manda otro UA, la
+  clearance se invalida. Hay que propagar el par cookie+UA como una unidad, no
+  la cookie sola.
+- **Está atada a la IP.** No sirve cosecharla en una máquina y usarla en otra,
+  ni detrás de un proxy rotativo.
+- **Caduca.** Cuando vuelva a aparecer `cf-mitigated: challenge`, hay que
+  reciclar: volver al paso 2, no reintentar en HTTP.
+
+Alternativa empaquetada: FlareSolverr expone justamente esto como un servicio
+al que se le piden URLs y devuelve el HTML ya resuelto más las cookies. Ahorra
+escribir el puente a cambio de sostener un servicio más.
+
+**Cuándo no vale la pena.** Si la obra está en un repositorio institucional
+accesible por HTTP simple, ese camino es más barato que todo lo anterior —ver
+el caso de ACM en `fuentes.md` de `pulpo-librero`—. El puente se justifica
+cuando hay muchos ítems del mismo dominio bloqueado y no hay espejo.

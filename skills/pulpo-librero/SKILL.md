@@ -36,10 +36,24 @@ Antes de buscar o descargar, pregunta en una sola tanda:
 5. Si ya existe `catalogo.tsv`, ¿se deben revisar sus pendientes, incorporar una
    nueva fuente o descargar solo las obras ya marcadas como relevantes?
 
-No descargues una obra protegida por paywall, préstamo controlado,
-autenticación o challenge. Registra el impedimento y ofrece una fuente abierta
-alternativa si existe. No uses la cascada de `chatarrero` para evadir un control
-de acceso.
+No descargues una obra protegida por paywall, préstamo controlado o
+autenticación. Registra el impedimento y ofrece una fuente abierta alternativa
+si existe. **No uses la cascada de `chatarrero` para evadir un control de
+acceso**: un muro de pago, un login o un préstamo controlado son un no
+definitivo, y ninguna escalada de la cascada los convierte en un sí.
+
+Un bloqueo técnico sobre una obra abierta es otra cosa. Varias editoriales
+responden `403` a cualquier cliente que no parezca un navegador, incluso sobre
+artículos de lectura libre: eso es detección de bots, no control de acceso, y
+ahí la cascada de `chatarrero` sí corresponde. La distinción se resuelve con
+evidencia, no con intuición: **antes de escalar, comprueba que la obra esté
+marcada como abierta** (`is_oa`, `oa_status`, licencia declarada en el catálogo)
+o que el editor la ofrezca sin credenciales. Si lo está, sube de nivel y
+registra qué hizo falta. Si no lo está, o si en algún punto aparece un pedido de
+credenciales, para y marca el proveedor como bloqueado.
+
+Escalar cuesta cortesía además de tokens: mantén las pausas entre peticiones y
+un límite de intentos por proveedor aunque el nivel más caro funcione.
 
 ## Flujo
 
