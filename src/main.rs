@@ -305,6 +305,40 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Lista las rutas relativas de los archivos que existen en `dir` (recursivo).
+/// Ignora `__pycache__` y el marcador `.factoria-origen`, que escribe el propio
+/// `install` y por definición nunca está en la fuente.
+fn archivos_relativos(dir: &Path, prefijo: &Path, acumulador: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let nombre = entry.file_name();
+        if nombre == "__pycache__" || nombre == ".factoria-origen" {
+            continue;
+        }
+        let relativo = prefijo.join(&nombre);
+        if entry.file_type()?.is_dir() {
+            archivos_relativos(&entry.path(), &relativo, acumulador)?;
+        } else {
+            acumulador.push(relativo);
+        }
+    }
+    Ok(())
+}
+
+/// Archivos que existen en la copia instalada y no en la fuente. Son
+/// exactamente los que `install` destruiría al reemplazar el directorio, y en
+/// la práctica son vivencias: bitácoras, índices y registros que la skill
+/// escribió mientras trabajaba. El principio 1 del repositorio dice que ese
+/// material no se elimina sin permiso del usuario, así que `install` se detiene
+/// cuando encuentra alguno.
+fn archivos_solo_en_destino(source: &Path, dest: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut instalados = Vec::new();
+    archivos_relativos(dest, Path::new(""), &mut instalados)?;
+    instalados.retain(|relativo| !source.join(relativo).exists());
+    instalados.sort();
+    Ok(instalados)
+}
+
 fn directories_equal(src: &Path, dst: &Path) -> std::io::Result<bool> {
     let mut src_entries: Vec<_> = fs::read_dir(src)?
         .filter_map(Result::ok)
@@ -374,7 +408,7 @@ fn validate_vivencias(source: &Path, name: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn run_install(name: &str, global: bool) {
+fn run_install(name: &str, global: bool, adoptar: bool) {
     let source = PathBuf::from("skills").join(name);
     if !source.is_dir() {
         eprintln!("error: no existe skills/{name}");
@@ -410,6 +444,48 @@ fn run_install(name: &str, global: bool) {
 
     let dest = dest_root.join(name);
     if dest.exists() {
+        // `install` reemplaza el directorio entero, así que todo lo que viva
+        // solo en la copia instalada se pierde. Antes eso ocurría en silencio.
+        let en_riesgo = match archivos_solo_en_destino(&source, &dest) {
+            Ok(lista) => lista,
+            Err(e) => {
+                eprintln!("error: no se pudo inspeccionar la copia instalada: {e}");
+                exit(1);
+            }
+        };
+        if !en_riesgo.is_empty() {
+            if adoptar {
+                for relativo in &en_riesgo {
+                    let origen = dest.join(relativo);
+                    let destino = source.join(relativo);
+                    if let Some(padre) = destino.parent() {
+                        if let Err(e) = fs::create_dir_all(padre) {
+                            eprintln!("error: no se pudo crear '{}': {e}", padre.display());
+                            exit(1);
+                        }
+                    }
+                    if let Err(e) = fs::copy(&origen, &destino) {
+                        eprintln!("error: no se pudo adoptar '{}': {e}", relativo.display());
+                        exit(1);
+                    }
+                    println!("adoptado: skills/{name}/{}", relativo.display());
+                }
+            } else {
+                eprintln!("error: la copia instalada de '{name}' tiene {} archivo(s) que no están en skills/{name}:", en_riesgo.len());
+                for relativo in &en_riesgo {
+                    eprintln!("  {}", relativo.display());
+                }
+                eprintln!();
+                eprintln!("Instalar los borraría. Suelen ser vivencias que la skill escribió");
+                eprintln!("mientras trabajaba, y este repositorio no elimina ese material sin");
+                eprintln!("permiso. Elegí una opción:");
+                eprintln!("  - copiarlos a mano a skills/{name}/ si querés conservarlos;");
+                eprintln!("  - volver a instalar con --adoptar-vivencias para que install los");
+                eprintln!("    copie a la fuente antes de reemplazar la copia instalada;");
+                eprintln!("  - borrarlos de {} si son basura de una versión vieja.", dest.display());
+                exit(1);
+            }
+        }
         if let Err(e) = fs::remove_dir_all(&dest) {
             eprintln!("error: no se pudo reemplazar '{}': {e}", dest.display());
             exit(1);
@@ -451,6 +527,9 @@ fn print_help() {
     println!("  skillcheck lint [DIR]            valida las skills en DIR (por defecto: skills)");
     println!("  skillcheck install NOMBRE        instala skills/NOMBRE en .claude/skills (este proyecto)");
     println!("  skillcheck install NOMBRE --global   instala en ~/.claude/skills (todos los proyectos)");
+    println!("  skillcheck install NOMBRE --adoptar-vivencias");
+    println!("      copia a la fuente los archivos que solo existen en la copia instalada");
+    println!("      (vivencias) antes de reemplazarla, en vez de abortar");
 }
 
 fn main() {
@@ -464,8 +543,15 @@ fn main() {
                 eprintln!("uso: skillcheck install NOMBRE [--global]");
                 exit(2);
             };
-            let global = it.next().map(|s| s.as_str()) == Some("--global");
-            run_install(name, global);
+            let flags: Vec<&str> = it.map(|s| s.as_str()).collect();
+            let global = flags.contains(&"--global");
+            let adoptar = flags.contains(&"--adoptar-vivencias");
+            if let Some(desconocido) = flags.iter().find(|f| **f != "--global" && **f != "--adoptar-vivencias") {
+                eprintln!("error: opción desconocida '{desconocido}'");
+                eprintln!("uso: skillcheck install NOMBRE [--global] [--adoptar-vivencias]");
+                exit(2);
+            }
+            run_install(name, global, adoptar);
         }
         Some("lint") => {
             let dir = it.next().cloned().unwrap_or_else(|| "skills".to_string());
@@ -479,6 +565,54 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Crea un árbol temporal y devuelve su raíz. Sin dependencias externas:
+    /// el repositorio no las tiene y este test no justifica introducir una.
+    fn arbol_temporal(sufijo: &str) -> PathBuf {
+        let raiz = env::temp_dir().join(format!("skillcheck-test-{sufijo}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&raiz);
+        fs::create_dir_all(&raiz).unwrap();
+        raiz
+    }
+
+    fn escribir(raiz: &Path, relativo: &str, contenido: &str) {
+        let ruta = raiz.join(relativo);
+        fs::create_dir_all(ruta.parent().unwrap()).unwrap();
+        fs::write(ruta, contenido).unwrap();
+    }
+
+    #[test]
+    fn detecta_vivencias_que_solo_viven_en_la_copia_instalada() {
+        let raiz = arbol_temporal("vivencias");
+        let source = raiz.join("source");
+        let dest = raiz.join("dest");
+        escribir(&source, "SKILL.md", "---\nname: x\ndescription: y\n---\n");
+        escribir(&dest, "SKILL.md", "---\nname: x\ndescription: y\n---\n");
+        // Escrita por la skill mientras trabajaba: existe solo en la instalada.
+        escribir(&dest, "vivencias/registro/2026-09-hallazgo.md", "no me borres");
+        escribir(&dest, ".factoria-origen", "/ruta/a/la/fuente");
+
+        let en_riesgo = archivos_solo_en_destino(&source, &dest).unwrap();
+
+        assert_eq!(en_riesgo, vec![PathBuf::from("vivencias/registro/2026-09-hallazgo.md")],
+            "el marcador .factoria-origen no debe contarse y la vivencia sí");
+        fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn no_reporta_nada_cuando_la_copia_instalada_no_agrega_archivos() {
+        let raiz = arbol_temporal("iguales");
+        let source = raiz.join("source");
+        let dest = raiz.join("dest");
+        escribir(&source, "SKILL.md", "a");
+        escribir(&source, "references/guia.md", "b");
+        escribir(&dest, "SKILL.md", "a");
+        escribir(&dest, "references/guia.md", "b distinto pero presente");
+
+        assert!(archivos_solo_en_destino(&source, &dest).unwrap().is_empty(),
+            "un archivo con contenido distinto no está en riesgo: install lo sobrescribe con la fuente");
+        fs::remove_dir_all(&raiz).unwrap();
+    }
 
     #[test]
     fn splits_simple_frontmatter() {

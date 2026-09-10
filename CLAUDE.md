@@ -25,6 +25,7 @@ cargo build --release                        # compilar skillcheck
 cargo run --quiet -- lint [DIR]              # validar skills en DIR (default: ./skills)
 cargo run --quiet -- install NOMBRE          # instalar en .claude/skills (este proyecto)
 cargo run --quiet -- install NOMBRE --global # instalar en ~/.claude/skills (todos los proyectos)
+cargo run --quiet -- install NOMBRE --adoptar-vivencias  # adoptar lo que solo esté en la copia instalada
 cargo test --quiet                           # tests unitarios del parser de frontmatter
 ```
 
@@ -128,3 +129,7 @@ skill.)
 - Tras editar `src/main.rs`, correr `cargo test --quiet` antes de seguir con
   el próximo cambio — no acumular varias ediciones sin haber corrido los
   tests entre medio.
+- Commits: sólo línea de asunto, sin cuerpo — la historia y el por qué viven
+  en `CHANGELOG.md`, no en el mensaje. Nunca con coautoría ni trailers que
+  atribuyan el commit a un agente o arnés (`Co-Authored-By:`, "Generated
+  with..."): el autor es siempre el usuario, sin excepción.

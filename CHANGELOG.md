@@ -2,6 +2,18 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.18.0] - 2026-09-10
+
+### Agregado
+
+- `install` deja de destruir en silencio lo que solo existe en la copia instalada. Antes reemplazaba el directorio entero, así que cualquier archivo que la skill hubiera escrito mientras trabajaba —bitácoras, índices, registros de `vivencias/`— desaparecía sin aviso al reinstalar. Ahora `archivos_solo_en_destino` compara ambos árboles antes de copiar y, si encuentra alguno, `install` aborta enumerándolos y ofreciendo las tres salidas posibles. Es el principio 1 del repositorio aplicado a la propia herramienta: ese material no se elimina sin permiso del usuario.
+- `install NOMBRE --adoptar-vivencias` resuelve el caso por el camino contrario: copia esos archivos a `skills/NOMBRE/` antes de reemplazar la copia instalada, de modo que la fuente adopta lo que la skill aprendió en vez de perderlo. Cada adopción se informa por su ruta.
+- El parser de flags de `install` pasa a leer todas las opciones en vez de mirar solo la primera, y rechaza las desconocidas con un uso explícito. Antes `install x --adoptar-vivencias --global` habría ignorado el segundo flag sin decir nada.
+
+### Cambiado
+
+- `CLAUDE.md` documenta el flag nuevo y fija la convención de commits del repositorio: solo línea de asunto, sin cuerpo —la historia vive en este archivo—, y nunca con coautoría ni trailers que atribuyan el commit a un agente o arnés.
+
 ## [1.17.0] - 2026-09-01
 
 ### Agregado
