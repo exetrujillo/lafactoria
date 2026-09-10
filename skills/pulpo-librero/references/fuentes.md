@@ -161,6 +161,35 @@ El descargador detecta este caso y lo marca `blocked_challenge`, que es
 terminal. **No subas a Playwright por esto**: el costo no se justifica cuando la
 misma obra suele estar en un repositorio institucional.
 
+### El estado de un proveedor caduca: revisá antes de confiar en la ronda pasada
+
+Onomázein (`10.7764/onomazein.*`) entregó sin fricción en las rondas del
+2026-09-08: tres obras suyas están en la biblioteca de `espalol`, bajadas de
+`ojs.uc.cl` con HTTP simple. El **2026-09-10 el mismo DOI resuelve a
+`revistadelaconstruccion.uc.cl`** —el OJS multirrevista de la UC— y devuelve
+`403` con una página de 304 KB titulada "Verificación de Seguridad — Pontificia
+Universidad Católica de Chile".
+
+La lección no es sobre esta revista sino sobre el catálogo: **que una fuente
+haya entregado antes no prueba que entregue hoy**, y un cambio de dominio del
+editor puede mover una fuente entera de la columna fácil a la bloqueada sin
+aviso. Cuando una obra falla en un proveedor que la bitácora daba por dócil,
+verificá a dónde resuelve el DOI ahora antes de dar por rota la obra.
+
+### Zora (`zora.uzh.ch`) — challenge de Anubis
+
+El repositorio de la Universidad de Zúrich responde `200` con
+`<title>Making sure you're not a bot!</title>` y hojas de estilo de
+`within.website/x/xess`: es **Anubis**, una prueba de trabajo, no Cloudflare.
+Las señales que mira `is_bot_challenge` (`cf-mitigated`, `server-timing: chlray`)
+**no lo detectan**, así que el descargador lo registra como `http_error` o
+`unreadable_pdf` según qué haya llegado, y no como `blocked_challenge`.
+
+Dos consecuencias prácticas: el PDF directo por `id/eprint/NNNN/1/archivo.pdf`
+tampoco pasa (devolvió `500`), y conviene buscar la obra en otro repositorio.
+Medido: *Accent mark and visual word recognition in Spanish* está bloqueada en
+Zora y se obtuvo entera en `access.archive-ouverte.unige.ch` (562 KB).
+
 ### La salida: repositorios institucionales
 
 Para una obra con DOI bloqueada en la editorial, el camino barato es la copia de
@@ -172,7 +201,16 @@ Dos cuidados:
 
 - OpenAlex y Unpaywall suelen traer la landing del repositorio pero con
   `url_for_pdf` vacío. Hay que raspar la landing y extraer el enlace: en DSpace
-  es un `href` con `/bitstreams/.../download`; en Pure, `/files/NNNN/*.pdf`.
+  es un `href` con `/bitstreams/.../download`; en Pure, `/files/NNNN/*.pdf`; en
+  **OJS** —que es casi toda la revista universitaria hispana— la landing es
+  `/article/view/N` y el PDF cuelga de `/article/download/N/M`, con un segundo
+  identificador que no se puede adivinar y hay que leer del HTML.
+- **Ojo con el síntoma.** Una landing HTML entregada por un host autorizado no
+  falla: baja con `200` y muere recién en la comprobación del extractor, así que
+  aparece como `unreadable_pdf`, que se lee como "el PDF está roto" cuando en
+  realidad nunca hubo PDF. En la tercera ronda de `espalol` fueron cinco de seis
+  fallas. Ante un `unreadable_pdf`, mirá el `content_type` de la URL antes de
+  buscar copia en otro lado: puede que la obra esté bien y falte un salto.
 - **Repositorio no implica abierto.** En el mismo sondeo, `aaltodoc.aalto.fi`
   (DSpace) entregó sin fricción, mientras que `research.aalto.fi` (Pure), de la
   *misma universidad*, está también tras Cloudflare y devolvió el mismo "Just a

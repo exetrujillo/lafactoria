@@ -2,6 +2,14 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.21.0] - 2026-09-10
+
+### Agregado
+
+- `references/fuentes.md` documenta que **el estado de un proveedor caduca**. Onomázein entregó sin fricción el 2026-09-08 —tres obras suyas están en la biblioteca, bajadas de `ojs.uc.cl` con HTTP simple— y el 2026-09-10 el mismo DOI resuelve a otro dominio de la UC y devuelve `403` tras una "Verificación de Seguridad". Que una fuente haya entregado antes no prueba que entregue hoy, y un cambio de dominio del editor mueve una fuente entera de columna sin aviso.
+- Nota sobre Zora (`zora.uzh.ch`), que usa **Anubis** y no Cloudflare: responde `200` con "Making sure you're not a bot!" y no emite las cabeceras que mira `is_bot_challenge`, así que cae como `http_error` en vez de `blocked_challenge`. Queda anotado como límite conocido de la detección, con el rescate medido en otro repositorio.
+- La sección de repositorios institucionales suma el patrón de **OJS** —la landing es `/article/view/N` y el PDF cuelga de `/article/download/N/M`, con un segundo identificador que hay que leer del HTML— y, sobre todo, el aviso de que una landing HTML servida por un host autorizado no falla: baja con `200` y muere recién en el extractor, de modo que aparece como `unreadable_pdf` y se lee como "el PDF está roto" cuando nunca hubo PDF. Fueron cinco de seis fallas en la tercera ronda de `espalol`.
+
 ## [1.20.0] - 2026-09-10
 
 ### Cambiado
