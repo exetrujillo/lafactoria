@@ -257,6 +257,8 @@ corteses por defecto. Los ajustes solo pueden reducir los límites de seguridad
 efectivos de una corrida; no autorizan hosts, evaden bloqueos ni habilitan
 descargas restringidas.
 
+Escribe en `vivencias/` según "Cierre".
+
 `vivencias/ajustes.json` también declara `familia`, la relación de crianza con
 sus dos skills madre (`chatarrero`, `biblio-rata`; ver "Skills madre" arriba),
 con la fecha en que quedó registrada. El validador la exige porque esta skill
@@ -277,3 +279,14 @@ con sus identificadores y causas, y qué criterios del problema siguen sin
 cubrirse. Conserva procedencia, fecha de incorporación, URL, tamaño y hash
 cuando estén disponibles. No afirmes que una obra quedó incorporada hasta que
 el PDF haya pasado la validación y la indexación.
+
+Cerrado el informe, mira si la corrida contradijo lo que esta skill documenta:
+una fuente que `references/fuentes.md` daba por dócil y hoy bloquea, un
+identificador que resolvió a otra obra sin fallar, un formato que se disfrazó
+de lo que no era, un estado del manifiesto que `references/contrato.md` describe
+de otro modo. Si es así, abre `vivencias/registro/<fecha>-<tema>.md` con el
+hallazgo y agrega su línea a `vivencias/INDICE.md` (`fecha | tema | resultado en
+pocas palabras | archivo`).
+
+Una corrida que salió como estaba previsto no se registra, por grande que haya
+sido: qué se bajó ya lo guardan el catálogo y el manifiesto.

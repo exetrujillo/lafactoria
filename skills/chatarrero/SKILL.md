@@ -128,6 +128,17 @@ probarlo contra el sitio real con pocas URLs, verificar que el output tenga el
 contenido buscado (no solo status 200), y anotar en la bitácora del proyecto
 qué nivel funcionó y cuáles quedaron descartados.
 
+Esa bitácora es dato del proyecto y ahí se queda. Aparte, mira si el sondeo
+contradijo lo que esta skill documenta: un nivel que no rindió donde
+`references/cascada.md` lo da por bueno, una señal de bloqueo distinta de las
+que la cascada describe, un sitio que obligó a subir de nivel sin presentar la
+señal que lo justifica. Si es así, abre `vivencias/registro/<fecha>-<tema>.md`
+con el hallazgo y agrega su línea a `vivencias/INDICE.md` (`fecha | tema |
+resultado en pocas palabras | archivo`), que es el índice que el paso 3 manda
+consultar antes de sondear.
+
+Un scraper que salió como estaba previsto no deja entrada.
+
 ## Vivencias propias
 
 Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus preferencias:
@@ -136,6 +147,8 @@ Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus preferencias:
   segundos en corridas donde el sitio sea sensible a bloqueos.
 - `navegador_por_defecto` (string): navegador que se intentará primero cuando
   la cascada llegue al nivel anti-bot; el valor actual es `nodriver`.
+
+Escribe en `vivencias/` según los pasos 3 y 5.
 
 `vivencias/ajustes.json` también declara `criados`: `pulpo-librero` depende de
 `chatarrero` en una relación de crianza (ver "Skills madre" en

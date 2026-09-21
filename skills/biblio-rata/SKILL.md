@@ -93,6 +93,21 @@ hay con qué extraer texto de PDF`, **no instalar nada por cuenta propia**: lee
 `references/instalacion.md`, que explica las opciones y manda preguntarle al
 usuario dónde instalarlo.
 
+### Cuándo queda registrado
+
+Mira si el trabajo sobre este corpus contradijo lo que esta skill documenta: un
+PDF o un corpus entero que rompió el extractor o quedó indexado sin texto útil,
+una consulta que necesitó más de las 5 páginas seguidas que "Reglas de gasto"
+pone como cota —esa misma sección admite que nunca se midió—, un tipo de
+documento donde el fragmento nunca alcanza y siempre hay que abrir la página.
+Si es así, abre `vivencias/registro/<fecha>-<tema>.md` con el hallazgo y agrega
+su línea a `vivencias/INDICE.md` (`fecha | tema | resultado en pocas palabras |
+archivo`).
+
+Una consulta que se respondió con el primer fragmento no se registra. Y el
+índice de un corpus es memoria de esa biblioteca, no de la skill: vive en
+`<corpus>/.biblio-rata/` y no tiene nada que hacer en `vivencias/`.
+
 ## Vivencias propias
 
 Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus preferencias:
@@ -107,6 +122,8 @@ Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus preferencias:
 Aplica las dos últimas preferencias pasando `--n` y `--tokens`. Para preferir
 un extractor disponible, usa `BIBLIO_RATA_EXTRACTOR`; no instales dependencias
 por cuenta propia si el extractor elegido no está disponible.
+
+Escribe en `vivencias/` según "Cuándo queda registrado", en Mantenimiento.
 
 `vivencias/ajustes.json` también declara `criados`: `pulpo-librero` depende de
 `biblio-rata` en una relación de crianza (ver "Skills madre" en

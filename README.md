@@ -260,6 +260,14 @@ Cuando el índice se vuelve largo, se consolida: varias entradas que dicen lo
 mismo se funden en una sola regla. Sin poda, las vivencias se degradan hasta
 volverse caras e inútiles a la vez.
 
+**Cuándo se escribe lo decide cada skill, en su flujo.** El disparador no vive
+en una sección genérica del `SKILL.md` sino en el paso donde ocurre —el cierre,
+la instalación, el mantenimiento—, y nombra el archivo propio contra el cual se
+mide la contradicción. El criterio es común: se registra cuando el resultado
+contradice lo que la skill documenta, y una corrida que salió como estaba
+previsto no se registra, por grande que haya sido. Una skill que sólo lee
+`ajustes.json` cumple un tercio de este contrato y nunca acumula nada.
+
 **Qué guardan las `vivencias/` y qué no.** `vivencias/` no es donde una
 skill guarda los datos de su propio dominio de trabajo — eso puede vivir en
 cualquier otro lugar, con el nombre y la visibilidad que le convengan a

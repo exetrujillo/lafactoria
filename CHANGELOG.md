@@ -2,6 +2,21 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.23.0] - 2026-09-21
+
+### Agregado
+
+- Las seis skills declaran ahora **cuándo escriben una vivencia**, y lo hacen en el paso de su flujo donde eso ocurre: el cierre de `chatarrero` y `pulpo-librero`, el mantenimiento de `biblio-rata`, la checklist de cierre de `prueba-y-error`, el paso 7 de `forjador`, el veredicto de `la-quinta-pata`. Hasta ahora el README definía `vivencias/` como tres archivos y los `SKILL.md` implementaban uno solo: la sección "Vivencias propias" existía en cinco de las seis y en las cinco decía lo mismo —lee `ajustes.json`, respeta estas claves, corre el validador— sin nombrar nunca `registro/`.
+- El diagnóstico fue estructural, no de gusto. La única skill que traía una condición de escritura —enterrada en su paso 3, no en la sección de vivencias— era también la única que acumulaba entradas de registro; las que sólo documentaban la lectura de `ajustes.json` no acumulaban ninguna. Una skill que no dice cuándo escribir, no escribe, y el esqueleto vacío que crea `forjador` no alcanza para cambiarlo.
+- El criterio es común a las seis: se registra cuando el resultado **contradice lo que la skill documenta**, y una corrida que salió como estaba previsto no se registra por grande que haya sido. Cada disparador nombra el archivo contra el cual se mide esa contradicción —`references/cascada.md`, `references/fuentes.md`, las reglas de gasto, `references/senales-de-alerta.md`— para que el criterio sea comprobable y no una apelación al buen juicio.
+- Dos skills necesitaban además que se marcara la frontera con el dato de dominio, porque tienen uno voluminoso al lado: la bitácora del proyecto en `chatarrero` y el ledger de `experimentos/` en `prueba-y-error` se quedan donde están y no son vivencias.
+- `la-quinta-pata` entra al sistema, del que estaba fuera por completo: 209 líneas sin una sola mención a vivencias, sin `scripts/` y sin ninguna clave de ajustes declarada. Estrena `scripts/validar_ajustes.rs` con su copia canónica de `json_util.rs`, su sección "Vivencias propias" y la clave `riesgos_dominantes_max` (3 por defecto), que es el umbral de riesgos dominantes que hasta ahora estaba fijo en el texto de "Veredicto y salida".
+
+### Cambiado
+
+- El paso 3 de `forjador` exige que toda skill nueva declare su disparador de escritura en el flujo, junto a la regla que ya exigía el validador cuando hay claves de `ajustes.json`. Sin esto, el arreglo duraba hasta la próxima skill: el paso 2 crea el esqueleto de `vivencias/`, que son los archivos, no el hábito.
+- El README documenta en "Vivencias" que el disparador vive en el flujo de cada skill y no en una sección genérica, para que no vuelva a desalinearse de los `SKILL.md`.
+
 ## [1.22.2] - 2026-09-21
 
 ### Corregido

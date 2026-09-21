@@ -328,6 +328,21 @@ documentación del proyecto. El ledger crudo no se versiona.
 Checklist de auditoría para correr al terminar cada experimento, en
 `references/senales-de-alerta.md`.
 
+### Qué queda en vivencias y qué no
+
+Corrida esa checklist, mira si el experimento contradijo lo que esta skill
+documenta. Dos casos concretos que sí van: la **predicción previa falló** —el
+contrato anticipaba un ganador y ganó otro, o el efecto apareció donde "Los
+invariantes" lo daba por improbable— y una **señal de alerta se disparó por un
+motivo que `references/senales-de-alerta.md` no anticipa**. Si ocurre alguno,
+abre `vivencias/registro/<fecha>-<tema>.md` con el hallazgo y agrega su línea a
+`vivencias/INDICE.md` (`fecha | tema | resultado en pocas palabras | archivo`).
+
+Lo que **no** va es el resultado del experimento. El contrato, el ledger, los
+crudos y los análisis viven en `experimentos/<nombre>/` y ahí se quedan: esa es
+la memoria del experimento, y es justo el volumen que `vivencias/` no debe
+absorber. Acá sólo entra lo que el experimento enseñó sobre experimentar.
+
 ## Vivencias propias
 
 Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus defaults del
@@ -335,6 +350,8 @@ analizador: `confianza` (0.95), `remuestreos` (10000) y `alpha` (0.05). Estos
 valores pueden cambiarse de forma estable entre experimentos; la corrección y
 el umbral siguen siendo decisiones obligatorias del experimento y no ajustes
 personales.
+
+Escribe en `vivencias/` según "Qué queda en vivencias y qué no".
 
 Para validar la forma del archivo, ejecuta:
 

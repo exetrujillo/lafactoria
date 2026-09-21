@@ -174,8 +174,9 @@ Jerarquiza por **probabilidad x impacto** con la escala cualitativa baja, media 
 alta y explica brevemente cada rango: baja = evidencia o activación poco frecuente,
 media = condición plausible o evidencia parcial, alta = condición frecuente o
 evidencia directa; ajusta el rango si el impacto potencial es grave aunque la
-probabilidad sea incierta. Elige hasta 3 riesgos dominantes; si hay menos, no
-rellenes la cuota. Para cada uno incluye mitigación o prueba, responsable, punto de
+probabilidad sea incierta. Elige hasta `riesgos_dominantes_max` riesgos
+dominantes —3 por defecto, ver "Vivencias propias"—; si hay menos, no rellenes
+la cuota. Para cada uno incluye mitigación o prueba, responsable, punto de
 control y criterio de parada.
 
 La mitigación tiene que caber en el contexto donde vive el objeto. Antes de
@@ -207,3 +208,37 @@ Separa hechos, inferencias y recomendaciones. Si una técnica no encontró nada
 sustantivo, dilo. Si la defensa, el responsable o el control no pueden determinarse,
 marca `no determinable` en vez de inventarlos. No humilles al autor: el humor es
 condimento y nunca reemplaza el rigor.
+
+### Antes de cerrar: qué queda registrado
+
+Entregado el veredicto, mira si esta auditoría contradijo lo que esta skill
+documenta: una técnica de `references/` que no rindió donde debería haber
+rendido, una clase de hallazgo que ya apareció en un objeto distinto sin que
+`references/hallazgo.md` la prevea, o una compuerta que dejó pasar un trabajo
+que no valía lo que costó. Si es así, abre
+`vivencias/registro/<fecha>-<tema>.md` con el hallazgo y agrega su línea a
+`vivencias/INDICE.md` (`fecha | tema | resultado en pocas palabras | archivo`).
+
+Una auditoría que salió como estaba previsto no se registra, por larga que haya
+sido. Y los riesgos que encontraste son del objeto auditado: van en el informe
+al usuario, no en las vivencias de esta skill, que sólo guardan lo que la
+auditoría enseñó sobre auditar.
+
+## Vivencias propias
+
+Lee `vivencias/ajustes.json` al comenzar una auditoría y respeta sus
+preferencias:
+
+- `riesgos_dominantes_max` (number): cuántos riesgos dominantes se jerarquizan
+  en "Veredicto y salida", 3 por defecto. Subirlo diluye la jerarquización, que
+  es justamente el punto de esa sección.
+
+Escribe en `vivencias/` según "Antes de cerrar: qué queda registrado".
+
+El validador comprueba la forma del archivo, las claves declaradas y sus tipos;
+no valida contenido de negocio.
+
+```sh
+rustc scripts/validar_ajustes.rs -O -o /tmp/la-quinta-pata-validar
+/tmp/la-quinta-pata-validar vivencias/ajustes.json
+```

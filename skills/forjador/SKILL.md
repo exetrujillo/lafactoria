@@ -82,6 +82,20 @@ relativa completa para que `skillcheck` pueda verificar que existen de verdad
 `vivencias/` no pasan por esa verificación (ver "Reglas que aplica
 skillcheck").
 
+El cuerpo tiene que declarar además **cuándo la skill escribe una vivencia**, y
+no en una sección aparte sino en el paso del flujo donde eso ocurre: el cierre,
+la instalación, el mantenimiento, lo que corresponda. El disparador nombra dos
+cosas, el momento del flujo y el archivo propio de la skill contra el cual se
+mide la contradicción —una referencia, un contrato, una regla del propio
+SKILL.md—. El criterio es común a todas: se registra cuando el resultado
+contradice lo que la skill documenta, y una corrida que salió como estaba
+previsto no se registra. Las seis skills del repo ya lo traen; copia el patrón
+de la que más se parezca a la nueva.
+
+El esqueleto del paso 2 no alcanza para esto: crea los archivos, no el hábito.
+Una skill que sólo lee `ajustes.json` cumple un tercio del contrato de
+`vivencias/` y nunca acumula nada en `registro/`.
+
 Si el cuerpo declara claves propias de `ajustes.json`, escribe también su
 validador de vivencias en `scripts/`, en Rust y sin dependencias externas
 (mismo patrón que `skills/pulpo-librero/scripts/`: `rustc archivo.rs -O -o
@@ -91,7 +105,7 @@ tipos coinciden. No valida contenido de negocio, solo la forma del archivo.
 
 No reescribas a mano el lector de JSON: copia `src/json_util.rs` tal cual al
 `scripts/` de la skill nueva y agrégale un `include!("json_util.rs");` al
-`validar_ajustes.rs` (mismo patrón en las cinco skills existentes con
+`validar_ajustes.rs` (mismo patrón en las seis skills existentes con
 validador). Es una copia deliberada, no un módulo compartido vía `use`: cada
 skill viaja sola cuando se instala `--global` en otro proyecto, y su
 `validar_ajustes.rs` se compila suelto con `rustc` sin `Cargo.toml`, así que
@@ -204,6 +218,17 @@ Si el usuario definió en el paso 1 que la skill sirve para cualquier
 proyecto, usa `--global`. Después de editar una skill ya instalada hay que
 volver a correr `install` para refrescar la copia.
 
+Instalada la skill, mira si forjarla contradijo lo que este SKILL.md documenta:
+una regla de "Reglas que aplica skillcheck" que en la práctica resultó ser otra
+cosa, una pregunta que al paso 1 le faltaba y sin la cual hubo que volver atrás,
+un patrón de redacción que el agente destinatario no siguió. Si es así, abre
+`vivencias/registro/<fecha>-<tema>.md` con el hallazgo y agrega su línea a
+`vivencias/INDICE.md` (`fecha | tema | resultado en pocas palabras | archivo`).
+
+Una skill que salió en una pasada no deja entrada: la skill nueva ya es el
+resultado. Y la entrada va en las vivencias de `forjador`, no en las de la skill
+recién creada, porque lo que se aprendió es sobre forjar.
+
 ## Vivencias propias
 
 `forjador` declara una clave en su propio `vivencias/ajustes.json`:
@@ -211,6 +236,8 @@ volver a correr `install` para refrescar la copia.
 se escriban las skills y las respuestas de esta skill. Antes de escribir
 cualquier texto (preguntas, `SKILL.md`, referencias), lee ese archivo y
 respeta el valor declarado.
+
+Escribe en `vivencias/` según el paso 7.
 
 `scripts/validar_ajustes.rs` valida que el archivo tenga las llaves
 balanceadas, las claves declaradas y sus tipos esperados; no valida
