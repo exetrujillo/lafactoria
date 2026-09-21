@@ -53,3 +53,12 @@ skills/*/vivencias/
 # Marcador que `skillcheck install` deja en la copia instalada con la ruta
 # absoluta de la fuente. Es local a cada máquina.
 .factoria-origen
+
+# Skills personales de quien clonó el repo. `skills/` es la biblioteca pública
+# que se comparte; el contenido de `priv-skills/` nunca se versiona, así que un
+# colaborador que no administra el repo puede crear las suyas sin ensuciar el
+# árbol ni arriesgar conflictos al actualizar. Sólo se versiona el `.gitkeep`,
+# para que la carpeta exista en un clon fresco y no haya que descubrirla: por
+# eso el patrón ignora `/*` y no el directorio, que git ni siquiera recorrería.
+/priv-skills/*
+!/priv-skills/.gitkeep

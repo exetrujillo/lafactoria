@@ -2,6 +2,29 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.0.0] - 2026-09-21
+
+### Agregado
+
+- **`priv-skills/`, la segunda raíz.** Una skill ahora nace en una de dos: `skills/`, que se versiona y viaja a GitHub, o `priv-skills/`, que está en el `.gitignore` y nunca sale de la máquina de quien clonó el repo. Hasta ahora la única raíz era pública, así que cualquiera que quisiera forjar una skill para su propio uso tenía tres salidas malas: publicarla en una biblioteca donde no le sirve a nadie más, dejarla fuera del repositorio y perder `skillcheck`, o cargar el árbol de git con cambios que le generan conflicto cada vez que actualiza desde el remoto.
+- La carpeta viaja vacía en el repositorio, con un `.gitkeep`, para que exista desde el clon y no haya que enterarse de ella leyendo el README. El patrón del `.gitignore` ignora `/priv-skills/*` y no el directorio: git no recorre un directorio excluido, así que la negación del `.gitkeep` no tendría efecto.
+- Es el principio 2 del README —lo que varía de usuario a usuario no se versiona— aplicado a la skill entera y no sólo a sus archivos. `vivencias/` ya cubría lo personal dentro de una skill compartida; esto cubre el caso en que lo personal es la skill.
+- Resuelve tres problemas que apuntan al mismo lugar: el colaborador que no administra el repositorio necesita poder forjar sin ensuciar el árbol; quien sí lo administra necesita dónde poner lo que no quiere publicar; y una skill personal suele nombrar rutas, clientes o proyectos concretos, que es justo lo que `1.22.2` estableció que lo versionado no debe contener.
+
+### Cambiado
+
+- `forjador` pregunta en el paso 1 si la skill es pública o personal, **con personal como opción recomendada**. El default es conservador a propósito y en contra del caso más frecuente de quien administra el repositorio: publicar después es mover una carpeta, despublicar algo que ya salió al remoto es reescribir historia. Protege a quien menos contexto tiene, que es quien recién clonó.
+- Es una pregunta separada de la que ya existía sobre el alcance de instalación, no un reemplazo. Son dos ejes: de quién es la fuente y dónde se instala la copia. Una skill personal puede instalarse `--global` y quedar disponible en todos los proyectos del usuario; una pública puede quedarse sólo en éste. Colapsarlos habría dado una correlación falsa.
+- `skillcheck lint` sin argumentos recorre las dos raíces con las mismas reglas: una skill personal no es una skill de segunda. `priv-skills/` ausente es silencio y no error, porque no existe en un clon fresco; un DIR explícito sí sigue fallando si no está.
+- `skillcheck install NOMBRE` busca en `skills/` y cae a `priv-skills/`, así que el comando no cambia según dónde viva la skill. Los mensajes de `install` dejan de nombrar `skills/<nombre>` literal y usan la ruta que se resolvió.
+- `install` también rechaza un nombre presente en las dos raíces, en vez de resolver una en silencio. No alcanzaba con la regla de `lint`: `install` valida una sola skill y nunca pasa por la detección de duplicados. Sin ese corte, quien tuviera `priv-skills/demo` y luego recibiera del remoto una `skills/demo` habría visto cómo `install demo` reemplazaba la copia instalada de su skill personal por la pública, y cómo `--adoptar-vivencias` copiaba sus archivos privados hacia el árbol versionado.
+- La detección de nombres duplicados de `lint_all` ahora cruza las dos raíces: `skills/x` y `priv-skills/x` son un error. Dos skills instaladas con el mismo `name` divergen en silencio, que es exactamente lo que `skillcheck` existe para evitar. Por eso `seen_names` guarda la ruta y no el nombre del directorio — sin la raíz, el mensaje de colisión no distinguiría una de otra.
+
+### Notas
+
+- No hay flujo automatizado para promover una skill personal a pública: se mueve el directorio y se corre `lint`. Se deja así hasta que el caso ocurra de verdad.
+- Nada de lo que ya existía se rompe. El mayor no es por incompatibilidad de comandos sino porque cambia el sentido del repositorio: hasta acá La Factoría era una biblioteca pública y nada más, y ahora es también el taller privado de cada quien.
+
 ## [1.23.0] - 2026-09-21
 
 ### Agregado

@@ -7,6 +7,10 @@ const MAX_DESCRIPTION_LEN: usize = 1024;
 const MAX_NAME_LEN: usize = 64;
 const RESOURCE_PREFIXES: [&str; 3] = ["references/", "scripts/", "assets/"];
 
+// Las dos raíces donde puede vivir una skill: `skills/` se versiona y se
+// comparte; `priv-skills/` está en .gitignore y es de quien clonó el repo.
+const RAICES: [&str; 2] = ["skills", "priv-skills"];
+
 // Copias canónicas de los lectores de JSON que cada skill copia tal cual a su
 // propio scripts/ (ver "Escribir el SKILL.md" en forjador/SKILL.md). Viven acá,
 // no en runtime, para que lint_skill pueda comparar bytes sin ninguna otra
@@ -201,7 +205,7 @@ fn lint_skill(skill_dir: &Path, seen_names: &mut Vec<(String, String)>, report: 
             &dir_name,
             "'name' debe cumplir el formato de OpenCode: minúsculas, números y guiones simples, entre 1 y 64 caracteres",
         ),
-        Some(n) => seen_names.push((n.clone(), dir_name.clone())),
+        Some(n) => seen_names.push((n.clone(), skill_dir.display().to_string())),
     }
 
     match &fm.description {
@@ -223,34 +227,39 @@ fn lint_skill(skill_dir: &Path, seen_names: &mut Vec<(String, String)>, report: 
     check_copias_canonicas(skill_dir, &dir_name, report);
 }
 
-fn lint_all(skills_dir: &Path) -> Report {
+fn lint_all(skills_dirs: &[PathBuf]) -> Report {
     let mut report = Report::new();
     let mut seen_names: Vec<(String, String)> = Vec::new();
+    let mut vistas = 0;
 
-    let entries = match fs::read_dir(skills_dir) {
-        Ok(e) => e,
-        Err(e) => {
-            report.error(
-                skills_dir.to_string_lossy().as_ref(),
-                format!("no se pudo leer el directorio: {e}"),
-            );
-            return report;
+    for skills_dir in skills_dirs {
+        let entries = match fs::read_dir(skills_dir) {
+            Ok(e) => e,
+            Err(e) => {
+                report.error(
+                    skills_dir.to_string_lossy().as_ref(),
+                    format!("no se pudo leer el directorio: {e}"),
+                );
+                continue;
+            }
+        };
+
+        let mut dirs: Vec<PathBuf> = entries
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect();
+        dirs.sort();
+        vistas += dirs.len();
+
+        for dir in &dirs {
+            lint_skill(dir, &mut seen_names, &mut report);
         }
-    };
-
-    let mut dirs: Vec<PathBuf> = entries
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.is_dir())
-        .collect();
-    dirs.sort();
-
-    if dirs.is_empty() {
-        println!("(no se encontraron skills en {})", skills_dir.display());
     }
 
-    for dir in &dirs {
-        lint_skill(dir, &mut seen_names, &mut report);
+    if vistas == 0 && report.errors.is_empty() {
+        let nombres: Vec<String> = skills_dirs.iter().map(|d| d.display().to_string()).collect();
+        println!("(no se encontraron skills en {})", nombres.join(", "));
     }
 
     for i in 0..seen_names.len() {
@@ -270,8 +279,17 @@ fn lint_all(skills_dir: &Path) -> Report {
     report
 }
 
-fn run_lint(dir: &str) {
-    let report = lint_all(&PathBuf::from(dir));
+fn raices_existentes() -> Vec<PathBuf> {
+    let dirs: Vec<PathBuf> = RAICES.iter().map(PathBuf::from).filter(|d| d.is_dir()).collect();
+    if dirs.is_empty() {
+        vec![PathBuf::from(RAICES[0])]
+    } else {
+        dirs
+    }
+}
+
+fn run_lint(dirs: &[PathBuf]) {
+    let report = lint_all(dirs);
 
     for e in &report.errors {
         println!("error: {e}");
@@ -408,12 +426,33 @@ fn validate_vivencias(source: &Path, name: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn localizar_skill(name: &str) -> Vec<PathBuf> {
+    RAICES
+        .iter()
+        .map(|raiz| PathBuf::from(raiz).join(name))
+        .filter(|candidato| candidato.is_dir())
+        .collect()
+}
+
 fn run_install(name: &str, global: bool, adoptar: bool) {
-    let source = PathBuf::from("skills").join(name);
-    if !source.is_dir() {
-        eprintln!("error: no existe skills/{name}");
+    let candidatos = localizar_skill(name);
+    // `lint` ya trata el mismo name en las dos raíces como duplicado, pero
+    // `install` valida una sola skill y no pasaría por esa regla: sin este
+    // corte elegiría una raíz en silencio y podría reemplazar la copia
+    // instalada de la otra, o adoptar sus vivencias hacia el árbol equivocado.
+    if candidatos.len() > 1 {
+        let rutas: Vec<String> = candidatos.iter().map(|c| c.display().to_string()).collect();
+        eprintln!("error: '{name}' existe en más de una raíz: {}", rutas.join(", "));
+        eprintln!("Dos skills con el mismo nombre divergen en silencio. Renombra una");
+        eprintln!("de las dos antes de instalar; 'lint' también lo rechaza.");
         exit(1);
     }
+    let Some(source) = candidatos.into_iter().next() else {
+        let buscadas: Vec<String> = RAICES.iter().map(|raiz| format!("{raiz}/{name}")).collect();
+        eprintln!("error: no existe {}", buscadas.join(" ni "));
+        exit(1);
+    };
+    let fuente = source.display().to_string();
 
     let mut report = Report::new();
     let mut seen_names = Vec::new();
@@ -468,10 +507,10 @@ fn run_install(name: &str, global: bool, adoptar: bool) {
                         eprintln!("error: no se pudo adoptar '{}': {e}", relativo.display());
                         exit(1);
                     }
-                    println!("adoptado: skills/{name}/{}", relativo.display());
+                    println!("adoptado: {fuente}/{}", relativo.display());
                 }
             } else {
-                eprintln!("error: la copia instalada de '{name}' tiene {} archivo(s) que no están en skills/{name}:", en_riesgo.len());
+                eprintln!("error: la copia instalada de '{name}' tiene {} archivo(s) que no están en {fuente}:", en_riesgo.len());
                 for relativo in &en_riesgo {
                     eprintln!("  {}", relativo.display());
                 }
@@ -479,7 +518,7 @@ fn run_install(name: &str, global: bool, adoptar: bool) {
                 eprintln!("Instalar los borraría. Suelen ser vivencias que la skill escribió");
                 eprintln!("mientras trabajaba, y este repositorio no elimina ese material sin");
                 eprintln!("permiso. Elige una opción:");
-                eprintln!("  - copiarlos a mano a skills/{name}/ si quieres conservarlos;");
+                eprintln!("  - copiarlos a mano a {fuente}/ si quieres conservarlos;");
                 eprintln!("  - volver a instalar con --adoptar-vivencias para que install los");
                 eprintln!("    copie a la fuente antes de reemplazar la copia instalada;");
                 eprintln!("  - borrarlos de {} si son basura de una versión vieja.", dest.display());
@@ -498,7 +537,7 @@ fn run_install(name: &str, global: bool, adoptar: bool) {
     match directories_equal(&source, &dest) {
         Ok(true) => {}
         Ok(false) => {
-            eprintln!("error: la copia instalada no coincide con skills/{name}");
+            eprintln!("error: la copia instalada no coincide con {fuente}");
             exit(1);
         }
         Err(e) => {
@@ -524,8 +563,8 @@ fn run_install(name: &str, global: bool, adoptar: bool) {
 
 fn print_help() {
     println!("uso:");
-    println!("  skillcheck lint [DIR]            valida las skills en DIR (por defecto: skills)");
-    println!("  skillcheck install NOMBRE        instala skills/NOMBRE en .claude/skills (este proyecto)");
+    println!("  skillcheck lint [DIR]            valida las skills en DIR (por defecto: skills y priv-skills)");
+    println!("  skillcheck install NOMBRE        instala la skill en .claude/skills (este proyecto)");
     println!("  skillcheck install NOMBRE --global   instala en ~/.claude/skills (todos los proyectos)");
     println!("  skillcheck install NOMBRE --adoptar-vivencias");
     println!("      copia a la fuente los archivos que solo existen en la copia instalada");
@@ -553,12 +592,12 @@ fn main() {
             }
             run_install(name, global, adoptar);
         }
-        Some("lint") => {
-            let dir = it.next().cloned().unwrap_or_else(|| "skills".to_string());
-            run_lint(&dir);
-        }
-        Some(other) => run_lint(other),
-        None => run_lint("skills"),
+        Some("lint") => match it.next() {
+            Some(dir) => run_lint(&[PathBuf::from(dir)]),
+            None => run_lint(&raices_existentes()),
+        },
+        Some(other) => run_lint(&[PathBuf::from(other)]),
+        None => run_lint(&raices_existentes()),
     }
 }
 

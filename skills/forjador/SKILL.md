@@ -22,8 +22,18 @@ otra respuesta:
 
 - ¿Qué tarea o frase del usuario debe disparar esta skill? (para definir `description`,
   que es lo único que el agente ve antes de decidir invocarla).
+- ¿Esta skill es parte pública de La Factoría o es personal de quien la
+  forja? Una pública se versiona y viaja a GitHub: tiene que servirle a alguien
+  que no es este usuario. Una personal vive en `priv-skills/`, que está en el
+  `.gitignore`, y puede nombrar sus proyectos, rutas y clientes sin problema.
+  Ofrece **personal como recomendada**: publicar después es mover una carpeta,
+  mientras que despublicar algo que ya salió al remoto es reescribir historia.
+  (Define la raíz de la skill en el paso 2).
 - ¿Esta skill es solo para este proyecto, o debería quedar disponible para
-  cualquier proyecto? (define alcance de instalación en paso 7).
+  cualquier proyecto? (define alcance de instalación en paso 7). Es una pregunta
+  distinta de la anterior y se hace aparte: una skill personal puede querer estar
+  disponible en todos los proyectos del usuario, y una pública puede quedarse
+  sólo en éste.
 - ¿Conviene investigar con las herramientas web disponibles (documentación oficial,
   repos de referencia) antes de escribir la skill, o basta con el
   conocimiento ya disponible? Investigar gasta más tokens, así que esto se
@@ -57,8 +67,12 @@ una duda puntual imposible de resolver de otro modo.
   Si la skill va a ser de las principales de La Factoría, la convención es usar
   un nombre entretenido y memorable, aunque pueda no ser el más descriptivo.
   (Ejemplos: `forjador`, `biblio-rata`, `prueba-y-error`, etc).
-- El directorio `skills/<nombre>/` DEBE llamarse igual que el campo `name`
-  del frontmatter — `skillcheck` lo exige.
+- La raíz sale de la primera pregunta del paso 1: `skills/<nombre>/` si es
+  pública, `priv-skills/<nombre>/` si es personal. `priv-skills/` ya viene en
+  el repo y su contenido está en el `.gitignore`: no hay nada que preparar.
+- El directorio DEBE llamarse igual que el campo `name` del frontmatter —
+  `skillcheck` lo exige. El nombre tampoco puede estar tomado por una skill de
+  la otra raíz: `lint` trata eso como duplicado y falla.
 - En este paso se crea también la estructura completa de `vivencias/` para la
   skill nueva: `ajustes.json` mínimo e `INDICE.md` vacío, aunque todavía no
   haya nada que registrar. Es un esqueleto que existe desde el nacimiento de
@@ -171,7 +185,9 @@ Una sola corrida por iteración, desde la raíz del repo:
 cargo run --quiet -- lint
 ```
 
-`lint` recibe el directorio que **contiene** las skills (por defecto `./skills`),
+`lint` sin argumentos recorre las dos raíces, `skills/` y `priv-skills/`, así
+que una sola corrida valida el repo entero sea cual sea la raíz de la skill
+nueva. Si le pasas un directorio, tiene que ser uno que **contenga** skills,
 no una skill suelta. Pasarle `skills/<nombre>` hace que trate a sus
 subdirectorios `references/` y `scripts/` como si fueran skills y reporte
 errores falsos del tipo `[scripts] falta el archivo SKILL.md`. Valida el repo
@@ -212,11 +228,20 @@ cargo run --quiet -- install <nombre>            # solo este proyecto: .claude/s
 cargo run --quiet -- install <nombre> --global   # todos los proyectos: ~/.claude/skills/<nombre>
 ```
 
+`install` busca el nombre primero en `skills/` y después en `priv-skills/`, así
+que el comando es el mismo sea la skill pública o personal.
+
 Si la skill es `forjador` mismo u otra pensada para este repo, instálala en el
 proyecto para que quede disponible en las conversaciones de agentes aquí.
 Si el usuario definió en el paso 1 que la skill sirve para cualquier
-proyecto, usa `--global`. Después de editar una skill ya instalada hay que
-volver a correr `install` para refrescar la copia.
+proyecto, usa `--global`. Eso vale igual para una skill personal: que no se
+versione no significa que no pueda estar disponible en todos sus proyectos.
+Después de editar una skill ya instalada hay que volver a correr `install` para
+refrescar la copia.
+
+Una skill pública se publica también en el `CHANGELOG.md`, con el bump de
+versión que corresponda. Una personal no toca el `CHANGELOG.md`: no es parte
+del ecosistema que este repositorio versiona.
 
 Instalada la skill, mira si forjarla contradijo lo que este SKILL.md documenta:
 una regla de "Reglas que aplica skillcheck" que en la práctica resultó ser otra
@@ -260,7 +285,11 @@ rustc skills/forjador/scripts/validar_ajustes.rs -O -o /tmp/forjador-validar
 - El cuerpo (fuera del frontmatter) no puede estar vacío.
 - Toda ruta relativa a `references/`, `scripts/` o `assets/` mencionada en el
   cuerpo debe existir en disco.
-- No puede haber dos skills con el mismo `name`.
+- No puede haber dos skills con el mismo `name`, ni siquiera si una está en
+  `skills/` y la otra en `priv-skills/`.
+- `lint` sin argumentos recorre las dos raíces con las mismas reglas; que una
+  skill sea personal no la exime de ninguna. Si `priv-skills/` no existe, no
+  pasa nada.
 - `install` rechaza skills con errores de validación.
 - `vivencias/` queda fuera de la verificación anterior a propósito: no está
   versionada, así que en un clon fresco legítimamente puede no existir

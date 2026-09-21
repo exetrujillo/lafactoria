@@ -22,7 +22,7 @@ redundante: tendría prioridad y podría divergir de este archivo.
 
 ```sh
 cargo build --release                        # compilar skillcheck
-cargo run --quiet -- lint [DIR]              # validar skills en DIR (default: ./skills)
+cargo run --quiet -- lint [DIR]              # validar skills en DIR (default: ./skills y ./priv-skills)
 cargo run --quiet -- install NOMBRE          # instalar en .claude/skills (este proyecto)
 cargo run --quiet -- install NOMBRE --global # instalar en ~/.claude/skills (todos los proyectos)
 cargo run --quiet -- install NOMBRE --adoptar-vivencias  # adoptar lo que solo esté en la copia instalada
@@ -43,8 +43,16 @@ fuente y se niega a instalar si hay errores.
   seguido de líneas indentadas). No reintroducir `serde_yaml` u otra
   dependencia salvo que el frontmatter deje de ser plano.
 - `lint_skill` valida un directorio de skill contra las reglas obligatorias
-  (ver abajo); `lint_all` recorre `skills/*` y además detecta nombres
-  duplicados entre skills distintas.
+  (ver abajo); `lint_all` recorre cada raíz que recibe y además detecta nombres
+  duplicados entre skills distintas, incluso si están en raíces distintas. Las
+  raíces son las de `RAICES`: `skills/`, versionada, y `priv-skills/`, personal
+  y en `.gitignore` (ver "Skills públicas y skills personales" en el README).
+  `raices_existentes` filtra las que no están en disco, porque `priv-skills/`
+  no existe en un clon fresco y su ausencia tiene que ser silencio; un DIR
+  explícito en la línea de comandos no se filtra, así que `lint no-existe`
+  sigue siendo un error. Cuando hay colisión de nombres, `seen_names` guarda la
+  ruta y no el nombre del directorio: `skills/x` y `priv-skills/x` son ambos
+  `x`, y el mensaje sin la raíz no diría nada.
 - `check_referenced_paths` escanea el cuerpo del SKILL.md buscando tokens que
   empiecen con `references/`, `scripts/` o `assets/` seguidos de algo más (no
   la sola mención del directorio) y verifica que ese archivo exista relativo
@@ -69,7 +77,7 @@ fuente y se niega a instalar si hay errores.
   lee JSON anidado, desescapa de verdad y exige un ámbito por consulta, para
   que leer `is_oa` de `open_access` no pueda devolver el de `primary_location`.
 - `copy_dir_recursive` + `run_install` implementan `skillcheck install`: validan
-  la skill, y copian (no symlink) `skills/<nombre>` completo a
+  la skill, y copian (no symlink) su directorio completo a
   `.claude/skills/<nombre>` (proyecto) o `$HOME/.claude/skills/<nombre>`
   (`--global`), reemplazando el destino si ya existe. Después de copiar,
   `directories_equal` compara ambos árboles byte a byte y aborta si difieren.
@@ -87,7 +95,11 @@ fuente y se niega a instalar si hay errores.
   README). **Se escribe después de `directories_equal` a propósito**:
   escribirlo antes hace fallar la comparación de árboles. Está en
   `.gitignore` porque contiene una ruta local.
-- `skills/<nombre>/SKILL.md` — cada subdirectorio de `skills/` es una skill
+- `localizar_skill` resuelve el NOMBRE de `install` recorriendo `RAICES` en
+  orden, así que una skill privada se instala con el mismo comando que una
+  pública. Los mensajes de error de `run_install` usan `fuente` —la ruta que
+  resolvió— y no `skills/<nombre>` literal.
+- `skills/<nombre>/SKILL.md` — cada subdirectorio de una raíz es una skill
   candidata. Regla no negociable: el campo `name` del frontmatter debe ser
   idéntico al nombre del directorio que la contiene y cumplir el formato de
   OpenCode (`^[a-z0-9]+(-[a-z0-9]+)*$`, máximo 64 caracteres).

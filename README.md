@@ -31,7 +31,9 @@ usuario a usuario, eso debe vivir en un lugar no versionado, dentro del
 `.gitignore` para no contaminar el repositorio con los detalles de uso de cada
 quien. Por el contrario, los `SKILL.md` y los archivos auxiliares que necesitan
 deben estar versionados para que el repositorio sea reproducible y las skills
-puedan compartirse.
+puedan compartirse. A veces lo que varía no es un archivo dentro de la skill
+sino la skill entera: para eso está `priv-skills/`, ver "Skills públicas y
+skills personales".
 
 **3. Neutralidad entre arneses.** Una skill no nombra herramientas propietarias
 de un agente concreto. Se escribe "la herramienta disponible para hacer
@@ -105,8 +107,8 @@ No todo lo automatizable merece ser una skill. **No lo es**:
 - Conocimiento que el modelo ya tiene sin ayuda.
 - Un envoltorio de un comando que se escribe más rápido a mano que invocando.
 - Algo que sólo sirve en un repositorio concreto. Eso es una skill de proyecto y
-  vive en el `.claude/skills/` de ese repositorio, no acá. Aunque un usuario puede
-  crearla aquí de todas maneras.
+  vive en el `.claude/skills/` de ese repositorio. Si de todos modos quieres
+  forjarla acá, su fuente va en `priv-skills/`, no en `skills/`.
 
 **Crear una skill nueva o extender una existente**, en este orden de preferencia:
 
@@ -116,6 +118,42 @@ No todo lo automatizable merece ser una skill. **No lo es**:
    de crianza: se declara la dependencia, no se copia el contenido.
 3. Sólo si el disparador y el objetivo son distintos de todo lo que hay,
    corresponde una skill nueva.
+
+## Skills públicas y skills personales
+
+Una skill nace en una de dos raíces, y esa es la primera decisión de su vida:
+
+- **`skills/`** — la biblioteca pública. Se versiona, viaja a GitHub y es lo que
+  recibe cualquiera que clone el repositorio. Una skill acá es una propuesta al
+  resto: tiene que servirle a alguien que no eres tú.
+- **`priv-skills/`** — tus skills. Su contenido está en el `.gitignore`, así que
+  nunca sale de tu máquina. Acá va lo que sólo tiene sentido para tus proyectos,
+  para tu forma de trabajar o para un cliente concreto. La carpeta viene vacía en
+  el repo, con un `.gitkeep`: existe desde el clon para que no haya que
+  descubrirla.
+
+Existe por tres motivos que apuntan al mismo lugar. Quien clona el repo sin
+administrarlo necesita poder forjar sus propias skills sin ensuciar el árbol de
+git ni arrastrar conflictos cada vez que actualiza. Quien sí lo administra
+necesita un lugar para lo que no quiere publicar. Y una skill personal suele
+nombrar rutas, clientes o proyectos concretos, que es justo lo que lo versionado
+no debe contener.
+
+Es una decisión distinta de **dónde se instala** la skill. Una privada puede
+instalarse global y quedar disponible en todos tus proyectos; una pública puede
+quedarse sólo en éste. Son dos ejes y `forjador` los pregunta por separado.
+
+Ante la duda, `priv-skills/`. Publicar después es mover una carpeta; despublicar
+algo que ya salió al remoto es reescribir historia.
+
+Las dos raíces pasan exactamente el mismo `lint`, con las mismas reglas: una
+skill privada no es una skill de segunda. Un mismo `name` en las dos es un error,
+por la misma razón que lo es entre dos skills de `skills/`: dos skills instaladas
+con el mismo nombre divergen en silencio. No hay un flujo automatizado para
+promover una privada a pública — se mueve el directorio y se corre `lint`.
+
+La relación con las vivencias es de escala. `vivencias/` es lo tuyo dentro de una
+skill compartida; `priv-skills/` es cuando la skill entera es tuya.
 
 ## Ciclo de vida
 
@@ -148,7 +186,7 @@ sobre el binario:
 
 **Retirar.** Una skill se retira cuando nada la invoca, cuando su formato quedó
 incompatible con los arneses vigentes, o cuando otra la absorbió. Se desinstala,
-se saca de `skills/` y se registra en el `CHANGELOG.md`. Una skill instalada que
+se saca de su raíz y, si era pública, se registra en el `CHANGELOG.md`. Una skill instalada que
 nadie usa no es inofensiva, ocupa espacio de decisión del agente y envejece sin
 que nadie la mire.
 
@@ -302,8 +340,10 @@ ser lo que sobrevivió a la prueba de servirle a otro.
 
 La copia instalada en `.claude/skills/<nombre>/` es la que los agentes leen, pero
 `install` la reemplaza entera en cada corrida: lo que se escriba ahí se pierde.
-**Las vivencias se escriben siempre en la fuente**, `skills/<nombre>/vivencias/`,
-y `install` las propaga a la copia.
+**Las vivencias se escriben siempre en la fuente**, en el `vivencias/` de la
+raíz desde la que se instaló la skill —`skills/<nombre>/` o
+`priv-skills/<nombre>/`, que es lo que `.factoria-origen` apunta—, y `install`
+las propaga a la copia.
 
 Para que una skill instalada sepa volver a su fuente —sobre todo si se instaló
 con `--global` y se la usa desde otro proyecto— `skillcheck install` deja en la
@@ -333,6 +373,7 @@ comandos está en `CLAUDE.md`.
 | `skills/<nombre>/SKILL.md` | Código fuente de cada skill | Sí |
 | `skills/<nombre>/references/`, `scripts/`, `assets/` | Facultades, herramientas y recursos de esa skill | Sí |
 | `skills/<nombre>/vivencias/` | Ajustes, índice y registro de uso de este usuario | No |
+| `priv-skills/<nombre>/` | Skills personales de quien clonó el repo, con la misma estructura interna | No |
 | `.claude/skills/<nombre>/` | Copia instalada: lo que los agentes realmente leen | Sólo `forjador`, como bootstrap |
 | `src/main.rs` | El binario `skillcheck` | Sí |
 | `docs/experimentos/` | Análisis y conclusiones de los experimentos de las skills principales | Sí |
@@ -342,9 +383,10 @@ comandos está en `CLAUDE.md`.
 
 La distinción entre `docs/experimentos/` y `experimentos/` es el principio 2
 hecho estructura de directorios: la conclusión de un experimento es del
-repositorio, los datos crudos son de quien lo corrió.
+repositorio, los datos crudos son de quien lo corrió. La que hay entre `skills/`
+y `priv-skills/` es el mismo principio aplicado a la skill entera.
 
-**Fuente contra copia instalada:** si editas una skill en `skills/`, hay que
+**Fuente contra copia instalada:** si editas una skill en su raíz, hay que
 volver a correr `install` para que el cambio se refleje. Hasta entonces no tiene
 ningún efecto sobre las conversaciones. Es el error más frecuente del repo.
 
