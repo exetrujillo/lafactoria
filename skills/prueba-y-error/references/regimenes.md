@@ -19,9 +19,9 @@ cuáles— una grilla gasta la mayoría de sus corridas variando cosas que no af
 el resultado, mientras que muestrear al azar prueba valores distintos en la
 dimensión que sí importa (p.3–4, p.15).
 
-Corolario operativo: **cuando no sabés qué dimensiones importan, muchas corridas
+Corolario operativo: **cuando no sabes qué dimensiones importan, muchas corridas
 tontas rinden más que pocas corridas razonadas.** Razonar sobre un espacio que no
-entendés todavía es gastar el recurso caro para ahorrar el barato.
+entiendes todavía es gastar el recurso caro para ahorrar el barato.
 
 ## El presupuesto fijo: el problema "n versus B/n"
 
@@ -31,8 +31,8 @@ incómoda: **no hay una partición universalmente buena**, porque depende de cu�
 presupuesto necesita un candidato para revelar su valor, que es justo lo que no se
 sabe. Hyperband cubre varias particiones en vez de apostar a una sola (p.6, p.12).
 
-Regla operativa: si no podés justificar cuánto presupuesto necesita un candidato
-para mostrarse, no elijas una partición — corré dos o tres agresividades
+Regla operativa: si no puedes justificar cuánto presupuesto necesita un candidato
+para mostrarse, no elijas una partición — corre dos o tres agresividades
 distintas. En su experiencia, la muerte temprana agresiva es generalmente segura
 (p.21).
 

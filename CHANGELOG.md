@@ -2,6 +2,13 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.22.1] - 2026-09-21
+
+### Corregido
+
+- La prosa versionada del repositorio mezclaba registros: 18 puntos repartidos en 11 archivos estaban escritos en voseo rioplatense mientras el resto usaba español neutro. Se unifica todo en español latinoamericano neutro. Alcanza a los tres lugares donde aparecía: prosa de skills (`forjador`, `prueba-y-error`, `pulpo-librero` y sus referencias), mensajes de error en Rust (`src/main.rs` y los cuatro `validar_ajustes.rs`) y la copia versionada de `forjador` en `.claude/skills/`.
+- Importa más en los `SKILL.md` que en cualquier otro texto del repositorio, porque son instrucciones que un agente lee y de las que toma el registro con el que después le habla a quien lo usa. Lo versionado fija uno neutro; quien quiera otro lo declara en `registro_lenguaje`, la clave de ajustes de `forjador`, sin tocar los archivos compartidos.
+
 ## [1.22.0] - 2026-09-10
 
 ### Corregido

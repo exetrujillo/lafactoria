@@ -161,7 +161,7 @@ El descargador detecta este caso y lo marca `blocked_challenge`, que es
 terminal. **No subas a Playwright por esto**: el costo no se justifica cuando la
 misma obra suele estar en un repositorio institucional.
 
-### El estado de un proveedor caduca: revisá antes de confiar en la ronda pasada
+### El estado de un proveedor caduca: revisa antes de confiar en la ronda pasada
 
 Onomázein (`10.7764/onomazein.*`) entregó sin fricción en las rondas del
 2026-09-08: tres obras suyas están en la biblioteca de `espalol`, bajadas de
@@ -174,7 +174,7 @@ La lección no es sobre esta revista sino sobre el catálogo: **que una fuente
 haya entregado antes no prueba que entregue hoy**, y un cambio de dominio del
 editor puede mover una fuente entera de la columna fácil a la bloqueada sin
 aviso. Cuando una obra falla en un proveedor que la bitácora daba por dócil,
-verificá a dónde resuelve el DOI ahora antes de dar por rota la obra.
+verifica a dónde resuelve el DOI ahora antes de dar por rota la obra.
 
 ### Zora (`zora.uzh.ch`) — challenge de Anubis
 
@@ -209,7 +209,7 @@ Dos cuidados:
   falla: baja con `200` y muere recién en la comprobación de PDF. En la tercera
   ronda de `espalol` fueron cinco de seis fallas. Desde `1.22.0` ese caso se
   registra como `not_a_pdf` y no como `unreadable_pdf`, así que el manifiesto ya
-  distingue "me dieron la landing" —raspá el enlace, la obra está bien— de "el
+  distingue "me dieron la landing" —raspa el enlace, la obra está bien— de "el
   PDF está roto", que sí manda a buscar copia en otro lado.
 - **Repositorio no implica abierto.** En el mismo sondeo, `aaltodoc.aalto.fi`
   (DSpace) entregó sin fricción, mientras que `research.aalto.fi` (Pure), de la

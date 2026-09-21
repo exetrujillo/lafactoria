@@ -74,7 +74,7 @@ fn main() {
     if let Some(v) = json_string(&content, "version") {
         if v != ESQUEMA_ESPERADO {
             errores.push(format!(
-                "'version' es \"{v}\" pero el esquema esperado de 'chatarrero' es \"{ESQUEMA_ESPERADO}\": no hay ningún cambio de esquema documentado todavía para esta skill, así que si ves este error revisá skills/chatarrero/scripts/validar_ajustes.rs — ESQUEMA_ESPERADO subió sin dejar la nota de qué cambió y qué clave de ajustes.json revisar"
+                "'version' es \"{v}\" pero el esquema esperado de 'chatarrero' es \"{ESQUEMA_ESPERADO}\": no hay ningún cambio de esquema documentado todavía para esta skill, así que si ves este error revisa skills/chatarrero/scripts/validar_ajustes.rs — ESQUEMA_ESPERADO subió sin dejar la nota de qué cambió y qué clave de ajustes.json revisar"
             ));
         }
     }

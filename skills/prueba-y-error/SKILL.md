@@ -229,7 +229,7 @@ completo se justifica sólo para auditar un fallo concreto que el parte señaló
 
 ### Ejecución aislada mediante agentes
 
-Cuando una ronda necesite trabajo que `ronda.py` no cubra, delegala en un
+Cuando una ronda necesite trabajo que `ronda.py` no cubra, delégala en un
 subagente de bajo contexto en vez de volcar el crudo al contexto principal. Qué
 incluir en el encargo, cómo encadenar rondas sin devolver el control al usuario
 y cuándo paralelizar está en `references/subagentes.md`.

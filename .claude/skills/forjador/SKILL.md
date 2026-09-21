@@ -99,8 +99,8 @@ no hay forma de importar un crate externo sin agregar infraestructura de
 build. `src/json_util.rs` es la única fuente de verdad; `lint` compara byte a
 byte cada `scripts/json_util.rs` contra esa copia canónica
 (`check_copias_canonicas` en `src/main.rs`) y falla si divergen, así que si
-`json_util.rs` gana una función nueva, propagala a las demás copias en la
-misma edición — `lint` avisa cuál quedó atrás, no lo hace por vos.
+`json_util.rs` gana una función nueva, propágala a las demás copias en la
+misma edición — `lint` avisa cuál quedó atrás, no lo hace por ti.
 
 Hay una segunda copia canónica con la misma mecánica, `src/json_api.rs`, para
 las skills que leen respuestas de API en vez de un `ajustes.json`. Son
@@ -122,7 +122,7 @@ declares acá una relación de uso, estudio o autointeracción: esas no llevan
 Si la relación es **crianza**, además escribe la entrada recíproca en la clave
 `criados` del `ajustes.json` de cada padre declarado (`skill`, `desde`, sin
 `relacion` porque `criados` es solo para crianza). Esto implica tocar el
-`ajustes.json` de una skill distinta a la que estás editando: hacelo en la
+`ajustes.json` de una skill distinta a la que estás editando: hazlo en la
 misma sesión, con la misma fecha en `desde`. La herencia no lleva reciprocidad.
 
 Si la skill (hija o padre) ya tenía un validador de vivencias, extiende sus
@@ -141,7 +141,7 @@ de esa comparación tiene que ser autosuficiente — qué cambió y qué clave d
 `forjador`, pueda arreglar el archivo a mano.
 
 Si el cambio de esquema es al propio `vivencias/ajustes.json` de `forjador`,
-migralo en la **misma edición** en que subís su `ESQUEMA_ESPERADO` — mismo
+mígralo en la **misma edición** en que subes su `ESQUEMA_ESPERADO` — mismo
 criterio que la reciprocidad `familia`/`criados` de más arriba. Si no, la
 skill queda autobloqueada sin salida: la copia instalada de `forjador`
 todavía no conoce el cambio nuevo (vive sin instalar en la fuente, bloqueada

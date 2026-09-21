@@ -478,8 +478,8 @@ fn run_install(name: &str, global: bool, adoptar: bool) {
                 eprintln!();
                 eprintln!("Instalar los borraría. Suelen ser vivencias que la skill escribió");
                 eprintln!("mientras trabajaba, y este repositorio no elimina ese material sin");
-                eprintln!("permiso. Elegí una opción:");
-                eprintln!("  - copiarlos a mano a skills/{name}/ si querés conservarlos;");
+                eprintln!("permiso. Elige una opción:");
+                eprintln!("  - copiarlos a mano a skills/{name}/ si quieres conservarlos;");
                 eprintln!("  - volver a instalar con --adoptar-vivencias para que install los");
                 eprintln!("    copie a la fuente antes de reemplazar la copia instalada;");
                 eprintln!("  - borrarlos de {} si son basura de una versión vieja.", dest.display());

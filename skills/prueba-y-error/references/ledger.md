@@ -206,7 +206,7 @@ Se redacta **leyendo el archivo**, no la conversación. Tres piezas obligatorias
    - **ABANDONAR** — el ruido domina o la diferencia no llega al umbral aunque
      exista. Es un resultado válido, no un fracaso: cierra la pregunta.
 
-Cerrá siempre con las **vías 1 y 2 del triage** que hayan aparecido, aunque no
+Cierra siempre con las **vías 1 y 2 del triage** que hayan aparecido, aunque no
 cuenten como evidencia. Un experimento donde la mitad de las corridas se
 descartaron por mediciones inválidas dice algo importante sobre el instrumento,
 aunque no diga nada sobre la hipótesis.
