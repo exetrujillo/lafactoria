@@ -164,7 +164,7 @@ misma obra suele estar en un repositorio institucional.
 ### El estado de un proveedor caduca: revisa antes de confiar en la ronda pasada
 
 Onomázein (`10.7764/onomazein.*`) entregó sin fricción en las rondas del
-2026-09-08: tres obras suyas están en la biblioteca de `espalol`, bajadas de
+2026-09-08: tres obras suyas entraron a una biblioteca local, bajadas de
 `ojs.uc.cl` con HTTP simple. El **2026-09-10 el mismo DOI resuelve a
 `revistadelaconstruccion.uc.cl`** —el OJS multirrevista de la UC— y devuelve
 `403` con una página de 304 KB titulada "Verificación de Seguridad — Pontificia
@@ -206,8 +206,8 @@ Dos cuidados:
   `/article/view/N` y el PDF cuelga de `/article/download/N/M`, con un segundo
   identificador que no se puede adivinar y hay que leer del HTML.
 - **Ojo con el síntoma.** Una landing HTML entregada por un host autorizado no
-  falla: baja con `200` y muere recién en la comprobación de PDF. En la tercera
-  ronda de `espalol` fueron cinco de seis fallas. Desde `1.22.0` ese caso se
+  falla: baja con `200` y muere recién en la comprobación de PDF. En una ronda
+  de descarga real fueron cinco de seis fallas. Desde `1.22.0` ese caso se
   registra como `not_a_pdf` y no como `unreadable_pdf`, así que el manifiesto ya
   distingue "me dieron la landing" —raspa el enlace, la obra está bien— de "el
   PDF está roto", que sí manda a buscar copia en otro lado.

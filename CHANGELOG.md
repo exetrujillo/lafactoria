@@ -2,6 +2,13 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [1.22.2] - 2026-09-21
+
+### Corregido
+
+- El `CHANGELOG.md` y `references/fuentes.md` nombraban un proyecto particular de quien usa el repositorio al citar la evidencia de dos hallazgos sobre descarga. Se reemplaza por el tipo de caso; la evidencia técnica —cinco de seis fallas por landing HTML servida con `200`— queda intacta.
+- Lo versionado tiene que servirle a cualquiera que clone. El README ya exige que un aprendizaje se promueva de `vivencias/` a `references/` sólo si puede describirse sin datos propios, por tipo de caso y no por nombre; esta es la misma regla aplicada al historial, que se había saltado el filtro.
+
 ## [1.22.1] - 2026-09-21
 
 ### Corregido
@@ -14,7 +21,7 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 ### Corregido
 
 - `pulpo descargar` colapsaba en `unreadable_pdf` dos diagnósticos que su propio contrato ya describía como distintos: una respuesta que no es un PDF y un PDF que el extractor no puede abrir. `validate_pdf` los distinguía internamente —lo primero que hace es mirar si el cuerpo empieza con `%PDF-`— y después los unía en un solo estado, quedando el manifiesto en contra de lo que `references/contrato.md` promete. `PdfValidation` pasa de `Invalid` a `NotPdf` y `Unreadable`, y cada uno alimenta su estado.
-- Importa porque el caso frecuente es el que quedaba mal etiquetado. Una landing HTML servida con `200` por un host autorizado no falla en transporte: muere recién en la comprobación, y aparecía como "el extractor no pudo abrir ninguna respuesta PDF", que se lee como PDF corrupto y manda a buscar copia en otro repositorio. En la tercera ronda de `espalol` fueron cinco de seis fallas, y las cinco se arreglaban raspando el enlace de la landing. El motivo de `not_a_pdf` ahora lo dice: "suele ser la landing en vez del archivo, raspar el enlace".
+- Importa porque el caso frecuente es el que quedaba mal etiquetado. Una landing HTML servida con `200` por un host autorizado no falla en transporte: muere recién en la comprobación, y aparecía como "el extractor no pudo abrir ninguna respuesta PDF", que se lee como PDF corrupto y manda a buscar copia en otro repositorio. En una ronda de descarga real fueron cinco de seis fallas, y las cinco se arreglaban raspando el enlace de la landing. El motivo de `not_a_pdf` ahora lo dice: "suele ser la landing en vez del archivo, raspar el enlace".
 
 ### Cambiado
 
@@ -26,7 +33,7 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 - `references/fuentes.md` documenta que **el estado de un proveedor caduca**. Onomázein entregó sin fricción el 2026-09-08 —tres obras suyas están en la biblioteca, bajadas de `ojs.uc.cl` con HTTP simple— y el 2026-09-10 el mismo DOI resuelve a otro dominio de la UC y devuelve `403` tras una "Verificación de Seguridad". Que una fuente haya entregado antes no prueba que entregue hoy, y un cambio de dominio del editor mueve una fuente entera de columna sin aviso.
 - Nota sobre Zora (`zora.uzh.ch`), que usa **Anubis** y no Cloudflare: responde `200` con "Making sure you're not a bot!" y no emite las cabeceras que mira `is_bot_challenge`, así que cae como `http_error` en vez de `blocked_challenge`. Queda anotado como límite conocido de la detección, con el rescate medido en otro repositorio.
-- La sección de repositorios institucionales suma el patrón de **OJS** —la landing es `/article/view/N` y el PDF cuelga de `/article/download/N/M`, con un segundo identificador que hay que leer del HTML— y, sobre todo, el aviso de que una landing HTML servida por un host autorizado no falla: baja con `200` y muere recién en el extractor, de modo que aparece como `unreadable_pdf` y se lee como "el PDF está roto" cuando nunca hubo PDF. Fueron cinco de seis fallas en la tercera ronda de `espalol`.
+- La sección de repositorios institucionales suma el patrón de **OJS** —la landing es `/article/view/N` y el PDF cuelga de `/article/download/N/M`, con un segundo identificador que hay que leer del HTML— y, sobre todo, el aviso de que una landing HTML servida por un host autorizado no falla: baja con `200` y muere recién en el extractor, de modo que aparece como `unreadable_pdf` y se lee como "el PDF está roto" cuando nunca hubo PDF. Fueron cinco de seis fallas en una misma ronda de descarga.
 
 ## [1.20.0] - 2026-09-10
 
