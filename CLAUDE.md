@@ -71,6 +71,11 @@ entera si la skill es personal, o solo sus `vivencias/` y su
   al directorio de la skill. Al escribir instrucciones dentro de una skill,
   no usar rutas de ejemplo inventadas con esos prefijos — el linter las trata
   como referencias reales que deben existir en disco.
+- `check_origen_vivencias` da error si el cuerpo menciona `vivencias/` sin
+  mencionar `.factoria-origen`: el agente lee la copia instalada, y sin esa
+  instrucción resolvería `vivencias/` contra ella en vez de contra la fuente.
+  `lint_skill` no la corre sobre una skill enlazada (`es_enlace`), que nunca
+  tiene copia y cuyo SKILL.md versiona otro proyecto.
 - `check_copias_canonicas` recorre la tabla `COPIAS_CANONICAS` y compara byte a
   byte cada `scripts/<nombre>` de la skill contra el archivo homónimo de `src/`
   embebido con `include_str!`. Hoy son dos: `json_util.rs`, que usan los

@@ -110,6 +110,15 @@ Una consulta que se respondió con el primer fragmento no se registra. Y el
 
 ## Vivencias propias
 
+**Dónde están las vivencias.** Este SKILL.md puede ser una copia instalada, y
+`install` reemplaza la copia entera. Antes de leer o escribir cualquier ruta
+`vivencias/` de este archivo, fíjate si junto a él hay un `.factoria-origen`:
+su única línea es la ruta absoluta de la fuente, y `vivencias/` se lee y se
+escribe en `<fuente>/vivencias/`, nunca en la copia. Sin marcador, este
+directorio es la fuente. Si el marcador apunta a una ruta que ya no existe,
+lee `vivencias/` de la copia sin escribir nada y avísale al usuario que
+reinstale la skill desde donde esté ahora su fuente.
+
 Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus preferencias:
 
 - `extractor_preferido` (string): extractor que se intentará usar primero,
@@ -136,5 +145,5 @@ no valida contenido de negocio.
 
 ```sh
 rustc scripts/validar_ajustes.rs -O -o /tmp/biblio-rata-validar
-/tmp/biblio-rata-validar vivencias/ajustes.json
+/tmp/biblio-rata-validar <fuente>/vivencias/ajustes.json
 ```

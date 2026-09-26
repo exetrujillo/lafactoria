@@ -152,6 +152,19 @@ fn check_referenced_paths(skill_dir: &Path, body: &str, skill: &str, report: &mu
     }
 }
 
+/// El agente lee la copia instalada, así que una ruta `vivencias/` relativa
+/// escribe en la copia, que `install` reemplaza entera. Una skill que usa
+/// vivencias tiene que decir cómo volver a la fuente, y esa es la función de
+/// `.factoria-origen`.
+fn check_origen_vivencias(body: &str, skill: &str, report: &mut Report) {
+    if body.contains("vivencias/") && !body.contains(".factoria-origen") {
+        report.error(
+            skill,
+            "el cuerpo usa 'vivencias/' sin decir que se resuelve contra la fuente que indica '.factoria-origen'; desde una copia instalada, la skill escribiría sus vivencias en la copia",
+        );
+    }
+}
+
 fn check_copias_canonicas(skill_dir: &Path, skill: &str, report: &mut Report) {
     for (nombre, canonico) in COPIAS_CANONICAS {
         let path = skill_dir.join("scripts").join(nombre);
@@ -222,6 +235,11 @@ fn lint_skill(skill_dir: &Path, seen_names: &mut Vec<(String, String)>, report: 
         report.error(&dir_name, "SKILL.md no tiene instrucciones después del frontmatter");
     } else {
         check_referenced_paths(skill_dir, body, &dir_name, report);
+        // Una skill enlazada nunca tiene copia instalada, y su SKILL.md lo
+        // versiona otro proyecto: exigirle el marcador no protege nada.
+        if !es_enlace(skill_dir) {
+            check_origen_vivencias(body, &dir_name, report);
+        }
     }
 
     check_copias_canonicas(skill_dir, &dir_name, report);
@@ -947,6 +965,27 @@ mod tests {
         assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
         assert!(report.errors[0].contains("rota") && report.errors[0].contains("enlace roto"),
             "el enlace roto no puede salir del lint en silencio: {:?}", report.errors);
+        fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn vivencias_sin_factoria_origen_es_error_salvo_en_una_enlazada() {
+        let raiz = arbol_temporal("origen-vivencias");
+        let sin_marcador = "Escribe en `vivencias/registro/`.\n";
+        let con_marcador = "Resuelve `vivencias/` contra `.factoria-origen`.\n";
+        escribir(&raiz, "skills/sin/SKILL.md", &format!("---\nname: sin\ndescription: y\n---\n\n{sin_marcador}"));
+        escribir(&raiz, "skills/con/SKILL.md", &format!("---\nname: con\ndescription: y\n---\n\n{con_marcador}"));
+        let real = raiz.join("proyecto/.claude/skills/ajena");
+        escribir(&real, "SKILL.md", &format!("---\nname: ajena\ndescription: y\n---\n\n{sin_marcador}"));
+        let priv_skills = raiz.join("priv-skills");
+        fs::create_dir_all(&priv_skills).unwrap();
+        std::os::unix::fs::symlink(&real, priv_skills.join("ajena")).unwrap();
+
+        let report = lint_all(&[raiz.join("skills"), priv_skills]);
+
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].starts_with("[sin]") && report.errors[0].contains(".factoria-origen"),
+            "{:?}", report.errors);
         fs::remove_dir_all(&raiz).unwrap();
     }
 

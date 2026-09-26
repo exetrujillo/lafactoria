@@ -372,6 +372,14 @@ con `--global` y se la usa desde otro proyecto— `skillcheck install` deja en l
 copia un archivo `.factoria-origen` con la ruta absoluta del directorio de
 origen.
 
+El marcador por sí solo no alcanza: el agente tiene que saber que debe leerlo.
+Por eso cada `SKILL.md` que usa `vivencias/` abre su sección "Vivencias
+propias" indicando que toda ruta `vivencias/` se resuelve contra esa fuente,
+tanto para leer como para escribir, y `lint` rechaza la skill que no lo diga.
+Si el marcador apunta a una ruta que ya no existe (el repo se movió o se
+renombró), la skill lee las vivencias de la copia, no escribe nada y pide
+reinstalar. Así nunca escribe en la copia, que `install` reemplaza.
+
 La relación inversa la guarda `instalaciones.tsv`, en la raíz del repo y fuera
 de git: cada `install` anota ahí dónde dejó la copia, y `skillcheck
 instalaciones` / `skillcheck refrescar` la usan para mostrar qué copias quedaron

@@ -345,6 +345,15 @@ absorber. Acá sólo entra lo que el experimento enseñó sobre experimentar.
 
 ## Vivencias propias
 
+**Dónde están las vivencias.** Este SKILL.md puede ser una copia instalada, y
+`install` reemplaza la copia entera. Antes de leer o escribir cualquier ruta
+`vivencias/` de este archivo, fíjate si junto a él hay un `.factoria-origen`:
+su única línea es la ruta absoluta de la fuente, y `vivencias/` se lee y se
+escribe en `<fuente>/vivencias/`, nunca en la copia. Sin marcador, este
+directorio es la fuente. Si el marcador apunta a una ruta que ya no existe,
+lee `vivencias/` de la copia sin escribir nada y avísale al usuario que
+reinstale la skill desde donde esté ahora su fuente.
+
 Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus defaults del
 analizador: `confianza` (0.95), `remuestreos` (10000) y `alpha` (0.05). Estos
 valores pueden cambiarse de forma estable entre experimentos; la corrección y
@@ -356,5 +365,5 @@ Escribe en `vivencias/` según "Qué queda en vivencias y qué no".
 Para validar la forma del archivo, ejecuta:
 
 ```sh
-rustc scripts/validar_ajustes.rs -O -o /tmp/prueba-y-error-validar && /tmp/prueba-y-error-validar vivencias/ajustes.json
+rustc scripts/validar_ajustes.rs -O -o /tmp/prueba-y-error-validar && /tmp/prueba-y-error-validar <fuente>/vivencias/ajustes.json
 ```

@@ -2,6 +2,19 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.3.0] - 2026-09-26
+
+### Corregido
+
+- **Las skills leen y escriben sus vivencias en la fuente, no en la copia instalada.** El README ya decía que las vivencias se escriben siempre en la fuente y que `.factoria-origen` indica dónde está, pero ningún `SKILL.md` mencionaba el marcador: las seis indicaban rutas `vivencias/` relativas, y un agente que lee la copia instalada las resuelve contra esa copia. Así se truncó la entrada `2026-09-spip-multipais.md` de `chatarrero`. Desde 1.18.0, `install` ya no borraba esas entradas en silencio, pero se detenía ante ellas: se trataba el síntoma y la causa seguía en el texto de las skills.
+- Las seis abren "Vivencias propias" con el mismo párrafo: si junto al `SKILL.md` existe `.factoria-origen`, `vivencias/` se lee y se escribe en `<fuente>/vivencias/`. La lectura también va a la fuente, porque la copia trae las vivencias como estaban al momento de instalar. Los comandos del validador reciben `<fuente>/vivencias/ajustes.json`, y `forjador` deja de usar rutas `skills/forjador/...`, que desde una copia `--global` usada en otro proyecto no existen.
+- Queda definido qué pasa si el marcador apunta a una ruta que ya no existe: la skill lee las vivencias de la copia, no escribe nada y pide reinstalar.
+
+### Agregado
+
+- `lint` da error cuando el cuerpo de un `SKILL.md` menciona `vivencias/` y no menciona `.factoria-origen`. Es una regla sobre el texto, no sobre el directorio de datos, así que no cambia que `vivencias/` pueda faltar en un clon fresco. Las skills enlazadas quedan exentas: nunca tienen copia instalada, y su `SKILL.md` lo versiona otro proyecto.
+- El paso 3 de `forjador` exige el párrafo en toda skill nueva, y "Reglas que aplica skillcheck" documenta la regla.
+
 ## [2.2.0] - 2026-09-26
 
 ### Agregado

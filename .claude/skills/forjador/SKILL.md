@@ -144,6 +144,12 @@ El esqueleto del paso 2 no alcanza para esto: crea los archivos, no el hábito.
 Una skill que sólo lee `ajustes.json` cumple un tercio del contrato de
 `vivencias/` y nunca acumula nada en `registro/`.
 
+La sección "Vivencias propias" abre con el párrafo "Dónde están las
+vivencias", copiado tal cual de cualquiera de las seis skills: le indica al
+agente que resuelva `vivencias/` contra la fuente que marca `.factoria-origen`
+y no contra la copia instalada que está leyendo. Sin ese párrafo, la skill
+escribe en la copia y la entrada nunca llega a la fuente. `lint` lo exige.
+
 Si el cuerpo declara claves propias de `ajustes.json`, escribe también su
 validador de vivencias en `scripts/`, en Rust y sin dependencias externas
 (mismo patrón que `skills/pulpo-librero/scripts/`: `rustc archivo.rs -O -o
@@ -300,6 +306,15 @@ recién creada, porque lo que se aprendió es sobre forjar.
 
 ## Vivencias propias
 
+**Dónde están las vivencias.** Este SKILL.md puede ser una copia instalada, y
+`install` reemplaza la copia entera. Antes de leer o escribir cualquier ruta
+`vivencias/` de este archivo, fíjate si junto a él hay un `.factoria-origen`:
+su única línea es la ruta absoluta de la fuente, y `vivencias/` se lee y se
+escribe en `<fuente>/vivencias/`, nunca en la copia. Sin marcador, este
+directorio es la fuente. Si el marcador apunta a una ruta que ya no existe,
+lee `vivencias/` de la copia sin escribir nada y avísale al usuario que
+reinstale la skill desde donde esté ahora su fuente.
+
 `forjador` declara una clave en su propio `vivencias/ajustes.json`:
 `registro_lenguaje` (string) — el registro en el que este usuario quiere que
 se escriban las skills y las respuestas de esta skill. Antes de escribir
@@ -313,8 +328,8 @@ balanceadas, las claves declaradas y sus tipos esperados; no valida
 contenido de negocio.
 
 ```sh
-rustc skills/forjador/scripts/validar_ajustes.rs -O -o /tmp/forjador-validar
-/tmp/forjador-validar skills/forjador/vivencias/ajustes.json
+rustc scripts/validar_ajustes.rs -O -o /tmp/forjador-validar
+/tmp/forjador-validar <fuente>/vivencias/ajustes.json
 ```
 
 ## Reglas que aplica skillcheck
@@ -343,3 +358,8 @@ rustc skills/forjador/scripts/validar_ajustes.rs -O -o /tmp/forjador-validar
 - `vivencias/` queda fuera de la verificación anterior a propósito: no está
   versionada, así que en un clon fresco legítimamente puede no existir
   todavía.
+- Si el cuerpo menciona `vivencias/`, también tiene que mencionar
+  `.factoria-origen`. Esta regla revisa el texto del SKILL.md, no el
+  directorio: sin esa instrucción, la skill instalada escribe sus vivencias en
+  la copia y no en la fuente. Las skills enlazadas quedan exentas porque nunca
+  tienen copia.
