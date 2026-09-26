@@ -199,11 +199,11 @@ fn run_download(args: &[String]) {
             total_bytes += bytes;
             if let Some(existing) = find_hash(dest, &hash) {
                 let _ = fs::remove_file(&temp_path);
-                write_row(&mut out, id, title, accepted_url, &existing.display().to_string(), "duplicate", "mismo hash en destino", bytes, &hash);
+                write_row(&mut out, id, title, accepted_url, &ruta_en_biblioteca(dest, &existing), "duplicate", "mismo hash en destino", bytes, &hash);
             } else {
                 let destination = next_destination(&final_path);
                 if fs::rename(&temp_path, &destination).is_ok() {
-                write_row(&mut out, id, title, accepted_url, &destination.display().to_string(), "accepted", "PDF verificado", bytes, &hash);
+                write_row(&mut out, id, title, accepted_url, &ruta_en_biblioteca(dest, &destination), "accepted", "PDF verificado", bytes, &hash);
                 } else {
                     write_row(&mut out, id, title, accepted_url, "", "failed", "no se pudo mover el temporal", bytes, "");
                 }
@@ -445,6 +445,10 @@ fn find_hash(dest: &Path, hash: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+fn ruta_en_biblioteca(dest: &Path, path: &Path) -> String {
+    path.strip_prefix(dest).unwrap_or(path).display().to_string()
 }
 
 fn next_destination(preferred: &Path) -> PathBuf {

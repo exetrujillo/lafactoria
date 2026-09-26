@@ -61,6 +61,17 @@ Estados:
 
 El manifiesto es la fuente de trazabilidad, no el índice de `biblio-rata`.
 `path` identifica el archivo local; `source_url` identifica su procedencia.
+
+`path` es **siempre relativo al directorio que contiene el `manifest.tsv`**, que
+es el de la biblioteca. Un archivo en la raíz queda como `nombre.pdf` a secas y
+uno en un subdirectorio conserva su subruta. Nunca se escribe una ruta absoluta
+ni un prefijo `./`: el manifiesto y los PDFs viajan juntos, así que una ruta
+anclada al disco de quien descargó se rompe apenas la biblioteca cambia de
+máquina, y de paso publica el `$HOME` de esa persona en un archivo que suele
+terminar versionado. La forma la fija `ruta_en_biblioteca`, no el valor que se
+le haya pasado a `--dest`: el mismo archivo produce la misma fila se haya
+invocado el descargador con una ruta relativa o con una absoluta.
+
 Cuando el agente disponga de DOI, ISBN, versión o licencia, debe conservarlos en
 las columnas de entrada o en un registro bibliográfico paralelo, sin inventar
 valores ausentes.

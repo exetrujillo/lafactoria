@@ -2,6 +2,14 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.0.1] - 2026-09-23
+
+### Corregido
+
+- La columna `path` de `manifest.tsv` heredaba la forma del argumento `--dest` en vez de tener una propia. `pulpo.rs` volcaba con `display()` las rutas que construía sobre `dest`, así que el mismo archivo quedaba escrito de cuatro maneras distintas según cómo se hubiera invocado el descargador: `./obra.pdf`, `docs/literatura/obra.pdf`, `obra.pdf` a secas o `/home/quien-sea/Documentos/proyecto/docs/literatura/obra.pdf`. Ahora `ruta_en_biblioteca` la fija relativa al directorio que contiene el manifiesto, que es donde el propio `pulpo.rs` lo crea.
+- La variante absoluta era la dañina y por dos motivos independientes. Rompe la biblioteca apenas cambia de máquina o de ruta —el manifiesto y los PDFs viajan juntos, pero una ruta anclada al disco de origen no— y publica el `$HOME` de quien descargó en un archivo que suele terminar versionado y compartido con un equipo. Un manifiesto medido en el momento del arreglo tenía las cuatro formas mezcladas en 60 filas, 8 de ellas absolutas.
+- `references/contrato.md` no especificaba la forma: decía que `path` identifica el archivo local, pero no respecto a qué. Ese era el hueco real; el código sólo lo hacía visible. El contrato ahora lo fija, junto con el motivo, para que la convención no dependa de cómo se tipeó un comando.
+
 ## [2.0.0] - 2026-09-21
 
 ### Agregado
