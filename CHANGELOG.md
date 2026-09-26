@@ -2,6 +2,19 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.2.0] - 2026-09-26
+
+### Agregado
+
+- **Skills enlazadas.** Una skill puede ser de un proyecto y no de la factoría: la usa su equipo o necesita archivos del proyecto para funcionar. Su fuente es entonces `<proyecto>/.claude/skills/<nombre>`, versionada por ese proyecto, y la factoría la registra con un enlace desde `priv-skills/`. Hasta ahora la factoría tenía dos ejes, la raíz y el lugar de instalación, y ninguno describía este caso. Surgió con una skill real enlazada así, y la guarda de 2.1.0 contra instalarla sobre sí misma era solo un síntoma: faltaba el modelo.
+- `lint` da error ante un enlace roto en cualquier raíz. Antes el filtro `is_dir` lo descartaba y la skill salía del lint sin aviso, así que bastaba con mover el proyecto para que la factoría dejara de validarla mientras seguía respondiendo `OK`. También da error ante cualquier enlace en `skills/`, que publicaría una ruta de esta máquina.
+- `instalaciones` lista las skills enlazadas (`enlazada` o `enlace_roto`) junto a las copias registradas.
+- `forjador` pregunta en su paso 1 quién es dueño de la fuente, pero no en esos términos. Pregunta si otras personas del proyecto usan la skill y si necesita archivos del proyecto para funcionar, y explica en cada opción en qué termina. "¿Copia o enlace?" no se puede responder sin conocer la factoría. La nota inicial para skills que viven fuera de la factoría queda absorbida por esa pregunta.
+
+### Cambiado
+
+- `install` rechaza cualquier fuente enlazada, no solo la que resuelve a su propio destino. Instalarla en otro lugar crearía la copia que se desincroniza de la fuente del proyecto.
+
 ## [2.1.0] - 2026-09-25
 
 ### Agregado

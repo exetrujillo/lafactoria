@@ -107,6 +107,15 @@ entera si la skill es personal, o solo sus `vivencias/` y su
   README). **Se escribe después de `directories_equal` a propósito**:
   escribirlo antes hace fallar la comparación de árboles. Está en
   `.gitignore` porque contiene una ruta local.
+- Una entrada de una raíz puede ser un enlace a la skill que versiona otro
+  proyecto (ver "Skills enlazadas" en el README). `lint_all` la recorre a
+  través del enlace, pero da error si el enlace está roto —`is_dir` lo sigue,
+  así que sin ese chequeo la skill saldría del lint en silencio— o si está en
+  `skills/`. `run_install` rechaza una fuente enlazada antes de validarla, y
+  `mismo_directorio` cubre además el caso en que la fuente resuelve al destino
+  sin ser ella misma un enlace, porque `install` borra el destino antes de
+  copiar. `skills_enlazadas` las lista para `instalaciones`; no entran en
+  `instalaciones.tsv`, que registra copias.
 - `localizar_skill` resuelve el NOMBRE de `install` recorriendo `RAICES` en
   orden, así que una skill privada se instala con el mismo comando que una
   pública. Los mensajes de error de `run_install` usan `fuente` —la ruta que

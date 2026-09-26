@@ -244,11 +244,30 @@ fn lint_all(skills_dirs: &[PathBuf]) -> Report {
             }
         };
 
-        let mut dirs: Vec<PathBuf> = entries
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.is_dir())
-            .collect();
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        for ruta in entries.filter_map(|e| e.ok()).map(|e| e.path()) {
+            if es_enlace(&ruta) {
+                let nombre = ruta.to_string_lossy().to_string();
+                let apunta = fs::read_link(&ruta).map(|d| d.display().to_string()).unwrap_or_default();
+                if skills_dir.as_path() == Path::new(RAICES[0]) {
+                    report.error(&nombre, format!(
+                        "es un enlace a '{apunta}'; skills/ se versiona y publicaría una ruta de esta máquina. Una skill enlazada va en priv-skills/"
+                    ));
+                    continue;
+                }
+                // `is_dir` sigue el enlace: uno roto no pasaría el filtro de abajo y
+                // la skill saldría del lint sin ningún aviso.
+                if !ruta.is_dir() {
+                    report.error(&nombre, format!(
+                        "enlace roto: apunta a '{apunta}', que no existe. Si el proyecto cambió de lugar, recrea el enlace con `ln -sfn <ruta-nueva> {nombre}`"
+                    ));
+                    continue;
+                }
+            }
+            if ruta.is_dir() {
+                dirs.push(ruta);
+            }
+        }
         dirs.sort();
         vistas += dirs.len();
 
@@ -430,6 +449,33 @@ fn validate_vivencias(source: &Path, name: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn es_enlace(ruta: &Path) -> bool {
+    fs::symlink_metadata(ruta).map(|m| m.file_type().is_symlink()).unwrap_or(false)
+}
+
+/// Skills cuya fuente es de otro proyecto: la entrada en la raíz es un enlace a
+/// la skill que ese proyecto versiona. No tienen copias, así que no pasan por el
+/// registro de instalaciones; `instalaciones` las lista aparte para que el
+/// inventario de dónde vive cada skill esté completo.
+fn skills_enlazadas() -> Vec<(String, PathBuf, &'static str)> {
+    let mut enlazadas = Vec::new();
+    for raiz in RAICES {
+        let Ok(entradas) = fs::read_dir(raiz) else { continue };
+        for ruta in entradas.filter_map(|e| e.ok()).map(|e| e.path()) {
+            if !es_enlace(&ruta) {
+                continue;
+            }
+            let nombre = ruta.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            match fs::canonicalize(&ruta) {
+                Ok(real) if real.is_dir() => enlazadas.push((nombre, real, "enlazada")),
+                _ => enlazadas.push((nombre, fs::read_link(&ruta).unwrap_or(ruta), "enlace_roto")),
+            }
+        }
+    }
+    enlazadas.sort();
+    enlazadas
+}
+
 fn localizar_skill(name: &str) -> Vec<PathBuf> {
     RAICES
         .iter()
@@ -535,10 +581,11 @@ fn excluir_de_git(proyecto: &Path, name: &str, personal: bool) -> std::io::Resul
     Ok(faltan)
 }
 
-/// Una fuente enlazada (`priv-skills/x` -> `<proyecto>/.claude/skills/x`) puede
-/// resolver al mismo directorio que el destino. `install` borra el destino antes
-/// de copiar, así que sin esta comprobación eliminaría la fuente; la de vivencias
-/// en riesgo no lo detecta porque compara el directorio consigo mismo.
+/// La fuente puede resolver al mismo directorio que el destino sin ser ella misma
+/// un enlace, por ejemplo si lo enlazado es la raíz `priv-skills/` entera.
+/// `install` borra el destino antes de copiar, así que sin esta comprobación
+/// eliminaría la fuente; la de vivencias en riesgo no lo detecta porque compara
+/// el directorio consigo mismo.
 fn mismo_directorio(a: &Path, b: &Path) -> bool {
     match (fs::canonicalize(a), fs::canonicalize(b)) {
         (Ok(a), Ok(b)) => a == b,
@@ -565,6 +612,14 @@ fn run_install(name: &str, destino: Destino, adoptar: bool) {
         exit(1);
     };
     let fuente = source.display().to_string();
+    if es_enlace(&source) {
+        let real = fs::canonicalize(&source).map(|r| r.display().to_string()).unwrap_or_else(|_| "un destino que no existe".to_string());
+        eprintln!("error: '{name}' es una skill enlazada: {fuente} -> {real}");
+        eprintln!("Su fuente es del proyecto que la versiona y ya está donde se la lee.");
+        eprintln!("Instalarla crearía una copia que se desincroniza de ella: edítala en su");
+        eprintln!("lugar y valídala con 'lint', que la recorre a través del enlace.");
+        exit(1);
+    }
 
     let mut report = Report::new();
     let mut seen_names = Vec::new();
@@ -716,6 +771,10 @@ fn run_instalaciones(filtro: Option<&str>) {
             None => "sin_fuente",
         };
         println!("{name:24} {estado:15} {}", copia.display());
+    }
+    for (name, real, estado) in skills_enlazadas().iter().filter(|(n, _, _)| filtro.map_or(true, |f| f == n)) {
+        hubo = true;
+        println!("{name:24} {estado:15} {}", real.display());
     }
     if !hubo {
         println!("sin instalaciones registradas{}", filtro.map(|f| format!(" para '{f}'")).unwrap_or_default());
@@ -870,6 +929,24 @@ mod tests {
         assert!(mismo_directorio(&enlace, &real));
         assert!(!mismo_directorio(&enlace, &raiz.join("otro/.claude/skills/x")),
             "un destino que todavía no existe no puede ser la fuente");
+        fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn lint_recorre_un_enlace_vivo_y_rechaza_uno_roto() {
+        let raiz = arbol_temporal("lint-enlaces");
+        let real = raiz.join("proyecto/.claude/skills/viva");
+        escribir(&real, "SKILL.md", "---\nname: viva\ndescription: y\n---\n\nCuerpo.\n");
+        let priv_skills = raiz.join("priv-skills");
+        fs::create_dir_all(&priv_skills).unwrap();
+        std::os::unix::fs::symlink(&real, priv_skills.join("viva")).unwrap();
+        std::os::unix::fs::symlink(raiz.join("proyecto-movido/.claude/skills/rota"), priv_skills.join("rota")).unwrap();
+
+        let report = lint_all(&[priv_skills]);
+
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].contains("rota") && report.errors[0].contains("enlace roto"),
+            "el enlace roto no puede salir del lint en silencio: {:?}", report.errors);
         fs::remove_dir_all(&raiz).unwrap();
     }
 

@@ -155,6 +155,28 @@ promover una privada a pública — se mueve el directorio y se corre `lint`.
 La relación con las vivencias es de escala. `vivencias/` es lo tuyo dentro de una
 skill compartida; `priv-skills/` es cuando la skill entera es tuya.
 
+### Skills enlazadas
+
+Antes de la raíz y del lugar de instalación hay una pregunta anterior: quién es
+dueño de la fuente. La fuente vive en el repositorio que la versiona. Casi
+siempre es la factoría, y lo que leen los agentes es una copia que `install`
+deja donde haga falta. Pero una skill puede ser de un proyecto: la usa su equipo,
+o necesita archivos del proyecto para funcionar. En ese caso su fuente es
+`<proyecto>/.claude/skills/<nombre>`, la versiona el git de ese proyecto, y la
+factoría la registra con un enlace desde `priv-skills/<nombre>`.
+
+Una skill enlazada pasa el mismo `lint` que cualquier otra y nunca se instala:
+ya está donde se la lee, y una copia sería justo lo que se desincroniza de ella.
+`install` se niega a copiarla, `lint` da error si el enlace se rompe (el proyecto
+cambió de ruta) o si aparece en `skills/` (publicaría una ruta de esta máquina),
+e `instalaciones` la lista como `enlazada` junto a las copias registradas. Sus
+vivencias quedan dentro del proyecto, así que es el `.gitignore` de ese proyecto
+el que las excluye: la skill la usa todo el equipo, y las vivencias de cada
+persona no deben versionarse para nadie.
+
+Una copia o un enlace no es una pregunta que el usuario tenga que saber
+responder. `forjador` le pregunta lo que sí sabe de su proyecto y deduce el caso.
+
 ## Ciclo de vida
 
 **Nacer.** Pídele al agente que use la skill **forjador**, o simplemente

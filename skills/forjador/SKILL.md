@@ -10,12 +10,6 @@ description: >
 
 # Forjador
 
-Si la skill que se va a mejorar vive fuera de la factoría (el `.claude/skills/`
-de otro proyecto, versionada por ese proyecto y sin fuente en `skills/` ni en
-`priv-skills/`), los pasos 2, 4 y 7 no aplican tal cual: se edita en su lugar,
-se valida con las herramientas de ese proyecto y la pregunta de raíz del paso 1
-pasa a ser si conviene traerla a `priv-skills/` e instalarla con `--destino`.
-
 El forjador de la factoría dirige la creación y actualización de skills en
 `skills/<nombre>/SKILL.md`. Objetivo: máxima claridad en entender qué quiere
 el usuario y qué necesita, para luego generar o actualizar el resultado.
@@ -28,6 +22,32 @@ otra respuesta:
 
 - ¿Qué tarea o frase del usuario debe disparar esta skill? (para definir `description`,
   que es lo único que el agente ve antes de decidir invocarla).
+- ¿Esta skill tiene que viajar con un proyecto concreto? Define **quién es dueño
+  de la fuente**, y de eso depende si lo que lee el agente es una copia o la
+  fuente misma. No la hagas en esos términos: "¿copia o enlace?" no se puede
+  responder sin conocer cómo funciona la factoría. Pregunta lo que el usuario sí
+  sabe de su proyecto —si otras personas que trabajan en él la usan o la van a
+  usar, y si necesita archivos del proyecto (sus scripts, sus datos) para
+  funcionar— y explica en cada opción en qué termina:
+  - **Sí, es del proyecto:** la fuente vive en `<proyecto>/.claude/skills/<nombre>`
+    y la versiona el git del proyecto. La factoría la ve a través de un enlace
+    desde `priv-skills/`, la valida con `lint` y nunca la instala, porque ya está
+    donde se la lee. Ventaja: se edita en un solo lugar y no hay copias que
+    mantener al día. Contra: si el proyecto cambia de ruta, el enlace se rompe
+    (`lint` lo avisa), y las vivencias de cada persona hay que excluirlas en el
+    `.gitignore` del proyecto.
+  - **No, es mía y la llevo a donde la necesite:** la fuente vive en la
+    factoría y lo que lee el agente es una copia instalada. Ventaja: la factoría
+    la valida al instalar y la misma skill puede estar en varios proyectos.
+    Contra: cada edición exige refrescar las copias (`instalaciones` muestra
+    cuáles quedaron atrás).
+
+  Si la skill ya existe en el `.claude/skills/` de otro proyecto, la respuesta
+  suele ser sí, y en ese caso se trata de enlazarla, no de moverla. Si la
+  respuesta es sí, las dos preguntas siguientes no aplican: una skill enlazada
+  siempre está en `priv-skills/` y nunca se instala. Díselo al usuario en vez
+  de omitirlas sin más. Por eso esta pregunta va en su propia ronda, antes que
+  las otras.
 - ¿Esta skill es parte pública de La Factoría o es personal de quien la
   forja? Una pública se versiona y viaja a GitHub: tiene que servirle a alguien
   que no es este usuario. Una personal vive en `priv-skills/`, que está en el
@@ -73,9 +93,17 @@ una duda puntual imposible de resolver de otro modo.
   Si la skill va a ser de las principales de La Factoría, la convención es usar
   un nombre entretenido y memorable, aunque pueda no ser el más descriptivo.
   (Ejemplos: `forjador`, `biblio-rata`, `prueba-y-error`, etc).
-- La raíz sale de la primera pregunta del paso 1: `skills/<nombre>/` si es
+- La raíz sale de la pregunta pública o personal del paso 1: `skills/<nombre>/` si es
   pública, `priv-skills/<nombre>/` si es personal. `priv-skills/` ya viene en
   el repo y su contenido está en el `.gitignore`: no hay nada que preparar.
+- Si la fuente es del proyecto, se crea (o ya existe) en
+  `<proyecto>/.claude/skills/<nombre>/` y la factoría la registra con un enlace
+  de ruta absoluta: `ln -s <proyecto>/.claude/skills/<nombre> priv-skills/<nombre>`.
+  Absoluta porque `priv-skills/` no se versiona y el enlace sólo tiene que
+  funcionar en esta máquina. Nunca en `skills/`: publicaría una ruta de esta
+  máquina, y `lint` lo rechaza. Las vivencias quedan dentro del proyecto, así
+  que agrega `.claude/skills/<nombre>/vivencias/` a su `.gitignore`, después de
+  consultarlo con el usuario, porque es un archivo del equipo.
 - El directorio DEBE llamarse igual que el campo `name` del frontmatter —
   `skillcheck` lo exige. El nombre tampoco puede estar tomado por una skill de
   la otra raíz: `lint` trata eso como duplicado y falla.
@@ -250,6 +278,11 @@ equipo. Después de editar una skill ya instalada, `cargo run --quiet --
 instalaciones <nombre>` muestra todas sus copias y `cargo run --quiet --
 refrescar <nombre>` pone al día las que quedaron atrás, estén donde estén.
 
+Una skill enlazada (fuente del proyecto, paso 1) salta este paso: `install` se
+niega a copiarla, porque la copia se desincronizaría de la fuente que el
+proyecto versiona. Ya está donde se la lee, y `instalaciones` la lista como
+`enlazada` con su ruta real.
+
 Una skill pública se publica también en el `CHANGELOG.md`, con el bump de
 versión que corresponda. Una personal no toca el `CHANGELOG.md`: no es parte
 del ecosistema que este repositorio versiona.
@@ -302,6 +335,11 @@ rustc skills/forjador/scripts/validar_ajustes.rs -O -o /tmp/forjador-validar
   skill sea personal no la exime de ninguna. Si `priv-skills/` no existe, no
   pasa nada.
 - `install` rechaza skills con errores de validación.
+- Un enlace en `priv-skills/` se valida como una skill más, a través del enlace.
+  Un enlace roto es un error: si no lo fuera, la skill saldría del `lint` sin
+  aviso. Cualquier enlace dentro de `skills/` es un error.
+- `install` rechaza una skill enlazada: su fuente es del proyecto que la
+  versiona.
 - `vivencias/` queda fuera de la verificación anterior a propósito: no está
   versionada, así que en un clon fresco legítimamente puede no existir
   todavía.
