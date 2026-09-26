@@ -10,6 +10,12 @@ description: >
 
 # Forjador
 
+Si la skill que se va a mejorar vive fuera de la factoría (el `.claude/skills/`
+de otro proyecto, versionada por ese proyecto y sin fuente en `skills/` ni en
+`priv-skills/`), los pasos 2, 4 y 7 no aplican tal cual: se edita en su lugar,
+se valida con las herramientas de ese proyecto y la pregunta de raíz del paso 1
+pasa a ser si conviene traerla a `priv-skills/` e instalarla con `--destino`.
+
 El forjador de la factoría dirige la creación y actualización de skills en
 `skills/<nombre>/SKILL.md`. Objetivo: máxima claridad en entender qué quiere
 el usuario y qué necesita, para luego generar o actualizar el resultado.
@@ -226,6 +232,7 @@ no valida nada y sigue de largo.
 ```sh
 cargo run --quiet -- install <nombre>            # solo este proyecto: .claude/skills/<nombre>
 cargo run --quiet -- install <nombre> --global   # todos los proyectos: ~/.claude/skills/<nombre>
+cargo run --quiet -- install <nombre> --destino <dir-proyecto>  # otro proyecto: <dir>/.claude/skills/<nombre>
 ```
 
 `install` busca el nombre primero en `skills/` y después en `priv-skills/`, así
@@ -236,8 +243,12 @@ proyecto para que quede disponible en las conversaciones de agentes aquí.
 Si el usuario definió en el paso 1 que la skill sirve para cualquier
 proyecto, usa `--global`. Eso vale igual para una skill personal: que no se
 versione no significa que no pueda estar disponible en todos sus proyectos.
-Después de editar una skill ya instalada hay que volver a correr `install` para
-refrescar la copia.
+Si la skill sirve a un solo proyecto que no es este repo, usa `--destino` con la
+ruta de ese proyecto: `install` excluye la copia de su git (entera si es
+personal, solo sus vivencias si es pública) sin tocar el `.gitignore` del
+equipo. Después de editar una skill ya instalada, `cargo run --quiet --
+instalaciones <nombre>` muestra todas sus copias y `cargo run --quiet --
+refrescar <nombre>` pone al día las que quedaron atrás, estén donde estén.
 
 Una skill pública se publica también en el `CHANGELOG.md`, con el bump de
 versión que corresponda. Una personal no toca el `CHANGELOG.md`: no es parte

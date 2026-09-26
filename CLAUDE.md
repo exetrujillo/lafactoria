@@ -26,12 +26,24 @@ cargo run --quiet -- lint [DIR]              # validar skills en DIR (default: .
 cargo run --quiet -- install NOMBRE          # instalar en .claude/skills (este proyecto)
 cargo run --quiet -- install NOMBRE --global # instalar en ~/.claude/skills (todos los proyectos)
 cargo run --quiet -- install NOMBRE --adoptar-vivencias  # adoptar lo que solo esté en la copia instalada
+cargo run --quiet -- install NOMBRE --destino DIR  # instalar en DIR/.claude/skills (otro proyecto)
+cargo run --quiet -- instalaciones [NOMBRE]  # copias registradas y si están al día con su fuente
+cargo run --quiet -- refrescar NOMBRE|--todas  # reinstalar las copias registradas desactualizadas
 cargo test --quiet                           # tests unitarios del parser de frontmatter
 ```
 
 `lint` termina con exit code `1` si hay algún `error:`. `install` corre `lint`
 sobre la skill primero, verifica que la copia resultante sea idéntica a la
 fuente y se niega a instalar si hay errores.
+
+Cada `install` exitoso anota la copia en `instalaciones.tsv` (raíz del repo,
+fuera de git, una línea `nombre<TAB>ruta`). `instalaciones` compara cada copia
+registrada con su fuente (`al_dia`, `desactualizada`, `no_existe`) y
+`refrescar` reinstala las desactualizadas en el mismo lugar, con la misma
+validación que `install`. Con `--destino`, además, `install` agrega al
+`.git/info/exclude` del proyecto de destino (local, no versionado) la copia
+entera si la skill es personal, o solo sus `vivencias/` y su
+`.factoria-origen` si es pública.
 
 ## Arquitectura
 

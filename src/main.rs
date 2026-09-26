@@ -358,11 +358,15 @@ fn archivos_solo_en_destino(source: &Path, dest: &Path) -> std::io::Result<Vec<P
 }
 
 fn directories_equal(src: &Path, dst: &Path) -> std::io::Result<bool> {
-    let mut src_entries: Vec<_> = fs::read_dir(src)?
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_name() != "__pycache__")
-        .collect();
-    let mut dst_entries: Vec<_> = fs::read_dir(dst)?.filter_map(Result::ok).collect();
+    // `__pycache__` es regenerable y `.factoria-origen` lo escribe `install`
+    // después de copiar: ninguno de los dos distingue una copia al día de una
+    // desactualizada, así que se ignoran de los dos lados.
+    let relevante = |entry: &fs::DirEntry| {
+        let nombre = entry.file_name();
+        nombre != "__pycache__" && nombre != ".factoria-origen"
+    };
+    let mut src_entries: Vec<_> = fs::read_dir(src)?.filter_map(Result::ok).filter(relevante).collect();
+    let mut dst_entries: Vec<_> = fs::read_dir(dst)?.filter_map(Result::ok).filter(relevante).collect();
     src_entries.sort_by_key(|entry| entry.file_name());
     dst_entries.sort_by_key(|entry| entry.file_name());
 
@@ -434,7 +438,115 @@ fn localizar_skill(name: &str) -> Vec<PathBuf> {
         .collect()
 }
 
-fn run_install(name: &str, global: bool, adoptar: bool) {
+/// Dónde se instala la copia. `Proyecto` es el `.claude/skills` del
+/// directorio actual (este repo); `Destino` es el de otro proyecto.
+enum Destino {
+    Proyecto,
+    Global,
+    Destino(PathBuf),
+}
+
+// Registro local de cada copia instalada, una línea `nombre<TAB>ruta` por
+// copia. Existe para responder la pregunta inversa a `.factoria-origen`: la
+// copia sabe cuál es su fuente, pero hasta ahora la fuente no sabía dónde
+// tenía copias, y editar la fuente sin reinstalar es el error más frecuente
+// del repo. Vive en la raíz, fuera de git, y no dentro de `vivencias/` de cada
+// skill: `install` copia `vivencias/` a cada destino, así que un registro ahí
+// esparciría las rutas absolutas de esta máquina por todos los proyectos.
+const REGISTRO_INSTALACIONES: &str = "instalaciones.tsv";
+
+fn leer_registro(registro: &Path) -> Vec<(String, PathBuf)> {
+    let Ok(texto) = fs::read_to_string(registro) else {
+        return Vec::new();
+    };
+    texto
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .filter_map(|l| l.split_once('\t'))
+        .map(|(n, r)| (n.to_string(), PathBuf::from(r)))
+        .collect()
+}
+
+fn registrar_instalacion(registro: &Path, name: &str, copia: &Path) -> std::io::Result<()> {
+    let mut filas = leer_registro(registro);
+    if filas.iter().any(|(n, r)| n == name && r == copia) {
+        return Ok(());
+    }
+    filas.push((name.to_string(), copia.to_path_buf()));
+    filas.sort();
+    let mut texto = String::from("# Generado por `skillcheck install`: nombre<TAB>ruta de la copia instalada.\n");
+    for (n, r) in &filas {
+        texto.push_str(&format!("{n}\t{}\n", r.display()));
+    }
+    fs::write(registro, texto)
+}
+
+/// Estado de una copia registrada frente a su fuente.
+fn estado_copia(fuente: &Path, copia: &Path) -> &'static str {
+    if !copia.is_dir() {
+        return "no_existe";
+    }
+    match directories_equal(fuente, copia) {
+        Ok(true) => "al_dia",
+        Ok(false) => "desactualizada",
+        Err(_) => "ilegible",
+    }
+}
+
+/// Excluye de git, en el proyecto de destino, lo que no debe versionarse ahí.
+/// Usa `.git/info/exclude`, que es local a la máquina, y no el `.gitignore`
+/// del proyecto: ese archivo es del equipo que lo mantiene y `skillcheck` no
+/// tiene por qué tocarlo. Una skill personal se excluye entera, porque
+/// `priv-skills/` nunca sale de la máquina; de una pública se excluyen solo
+/// sus vivencias y el marcador con la ruta absoluta de la fuente.
+fn excluir_de_git(proyecto: &Path, name: &str, personal: bool) -> std::io::Result<Vec<String>> {
+    let git = proyecto.join(".git");
+    if !git.is_dir() {
+        return Ok(Vec::new());
+    }
+    let patrones: Vec<String> = if personal {
+        vec![format!("/.claude/skills/{name}/")]
+    } else {
+        vec![
+            format!("/.claude/skills/{name}/vivencias/"),
+            format!("/.claude/skills/{name}/.factoria-origen"),
+        ]
+    };
+    let exclude = git.join("info").join("exclude");
+    let actual = fs::read_to_string(&exclude).unwrap_or_default();
+    let faltan: Vec<String> = patrones
+        .into_iter()
+        .filter(|p| !actual.lines().any(|l| l.trim() == p))
+        .collect();
+    if faltan.is_empty() {
+        return Ok(faltan);
+    }
+    fs::create_dir_all(git.join("info"))?;
+    let mut texto = actual;
+    if !texto.is_empty() && !texto.ends_with('\n') {
+        texto.push('\n');
+    }
+    texto.push_str(&format!("# skillcheck install {name}\n"));
+    for p in &faltan {
+        texto.push_str(p);
+        texto.push('\n');
+    }
+    fs::write(&exclude, texto)?;
+    Ok(faltan)
+}
+
+/// Una fuente enlazada (`priv-skills/x` -> `<proyecto>/.claude/skills/x`) puede
+/// resolver al mismo directorio que el destino. `install` borra el destino antes
+/// de copiar, así que sin esta comprobación eliminaría la fuente; la de vivencias
+/// en riesgo no lo detecta porque compara el directorio consigo mismo.
+fn mismo_directorio(a: &Path, b: &Path) -> bool {
+    match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+fn run_install(name: &str, destino: Destino, adoptar: bool) {
     let candidatos = localizar_skill(name);
     // `lint` ya trata el mismo name en las dos raíces como duplicado, pero
     // `install` valida una sola skill y no pasaría por esa regla: sin este
@@ -469,19 +581,31 @@ fn run_install(name: &str, global: bool, adoptar: bool) {
         exit(1);
     }
 
-    let dest_root = if global {
-        match env::var_os("HOME") {
+    let dest_root = match &destino {
+        Destino::Global => match env::var_os("HOME") {
             Some(home) => PathBuf::from(home).join(".claude").join("skills"),
             None => {
                 eprintln!("error: no se pudo determinar $HOME para la instalación global");
                 exit(1);
             }
+        },
+        Destino::Proyecto => PathBuf::from(".claude").join("skills"),
+        Destino::Destino(proyecto) => {
+            if !proyecto.is_dir() {
+                eprintln!("error: el proyecto de destino '{}' no existe o no es un directorio", proyecto.display());
+                exit(1);
+            }
+            proyecto.join(".claude").join("skills")
         }
-    } else {
-        PathBuf::from(".claude").join("skills")
     };
 
     let dest = dest_root.join(name);
+    if mismo_directorio(&source, &dest) {
+        eprintln!("error: la fuente de '{name}' ({fuente}) y el destino {} son el mismo directorio", dest.display());
+        eprintln!("La fuente es un enlace a esa copia: instalar la borraría antes de copiarla.");
+        eprintln!("No hay nada que instalar; la skill ya está donde se la lee.");
+        exit(1);
+    }
     if dest.exists() {
         // `install` reemplaza el directorio entero, así que todo lo que viva
         // solo en la copia instalada se pierde. Antes eso ocurría en silencio.
@@ -557,8 +681,83 @@ fn run_install(name: &str, global: bool, adoptar: bool) {
         eprintln!("aviso: no se pudo escribir '{}': {e}", marcador.display());
     }
 
-    let alcance = if global { "global (disponible en todos los proyectos)" } else { "de este proyecto" };
+    let copia = fs::canonicalize(&dest).unwrap_or_else(|_| dest.clone());
+    if let Err(e) = registrar_instalacion(Path::new(REGISTRO_INSTALACIONES), name, &copia) {
+        eprintln!("aviso: no se pudo registrar la instalación en {REGISTRO_INSTALACIONES}: {e}");
+    }
+    if let Destino::Destino(proyecto) = &destino {
+        let personal = source.starts_with(RAICES[1]);
+        match excluir_de_git(proyecto, name, personal) {
+            Ok(agregados) if !agregados.is_empty() => {
+                println!("excluido de git en el proyecto (.git/info/exclude): {}", agregados.join(" "));
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("aviso: no se pudo actualizar .git/info/exclude: {e}"),
+        }
+    }
+
+    let alcance = match destino {
+        Destino::Global => "global (disponible en todos los proyectos)".to_string(),
+        Destino::Proyecto => "de este proyecto".to_string(),
+        Destino::Destino(p) => format!("del proyecto {}", p.display()),
+    };
     println!("'{name}' instalada en {} — alcance {alcance}", dest.display());
+}
+
+/// `skillcheck instalaciones [NOMBRE]`: lista las copias registradas y si
+/// están al día con su fuente.
+fn run_instalaciones(filtro: Option<&str>) {
+    let filas = leer_registro(Path::new(REGISTRO_INSTALACIONES));
+    let mut hubo = false;
+    for (name, copia) in filas.iter().filter(|(n, _)| filtro.map_or(true, |f| f == n)) {
+        hubo = true;
+        let estado = match localizar_skill(name).first() {
+            Some(fuente) => estado_copia(fuente, copia),
+            None => "sin_fuente",
+        };
+        println!("{name:24} {estado:15} {}", copia.display());
+    }
+    if !hubo {
+        println!("sin instalaciones registradas{}", filtro.map(|f| format!(" para '{f}'")).unwrap_or_default());
+        println!("(el registro empieza con la primera `install` posterior a 2.1.0; reinstala para registrar las anteriores)");
+    }
+}
+
+/// `skillcheck refrescar NOMBRE | --todas`: reinstala cada copia registrada
+/// que quedó desactualizada, en el mismo lugar donde estaba. Pasa por la
+/// misma validación que `install`, y se detiene en la primera que falle.
+fn run_refrescar(filtro: Option<&str>, adoptar: bool) {
+    let filas = leer_registro(Path::new(REGISTRO_INSTALACIONES));
+    let mut refrescadas = 0;
+    for (name, copia) in filas.iter().filter(|(n, _)| filtro.map_or(true, |f| f == n)) {
+        let Some(fuente) = localizar_skill(name).into_iter().next() else {
+            println!("omitida: '{name}' ya no existe en skills/ ni en priv-skills/ ({})", copia.display());
+            continue;
+        };
+        match estado_copia(&fuente, copia) {
+            "al_dia" => continue,
+            "no_existe" => {
+                println!("omitida: la copia de '{name}' ya no existe en {}", copia.display());
+                continue;
+            }
+            _ => {}
+        }
+        let Some(dest_root) = copia.parent() else { continue };
+        let home_skills = env::var_os("HOME").map(|h| PathBuf::from(h).join(".claude").join("skills"));
+        let destino = if home_skills.as_deref() == Some(dest_root) {
+            Destino::Global
+        } else if fs::canonicalize(".claude/skills").ok().as_deref() == Some(dest_root) {
+            Destino::Proyecto
+        } else {
+            match dest_root.parent().and_then(Path::parent) {
+                Some(proyecto) => Destino::Destino(proyecto.to_path_buf()),
+                None => continue,
+            }
+        };
+        run_install(name, destino, adoptar);
+        refrescadas += 1;
+    }
+    println!("{refrescadas} copia(s) refrescada(s)");
 }
 
 fn print_help() {
@@ -566,6 +765,9 @@ fn print_help() {
     println!("  skillcheck lint [DIR]            valida las skills en DIR (por defecto: skills y priv-skills)");
     println!("  skillcheck install NOMBRE        instala la skill en .claude/skills (este proyecto)");
     println!("  skillcheck install NOMBRE --global   instala en ~/.claude/skills (todos los proyectos)");
+    println!("  skillcheck install NOMBRE --destino DIR  instala en DIR/.claude/skills (otro proyecto)");
+    println!("  skillcheck instalaciones [NOMBRE]     lista las copias registradas y si están al día");
+    println!("  skillcheck refrescar NOMBRE|--todas   reinstala las copias registradas desactualizadas");
     println!("  skillcheck install NOMBRE --adoptar-vivencias");
     println!("      copia a la fuente los archivos que solo existen en la copia instalada");
     println!("      (vivencias) antes de reemplazarla, en vez de abortar");
@@ -582,15 +784,51 @@ fn main() {
                 eprintln!("uso: skillcheck install NOMBRE [--global]");
                 exit(2);
             };
-            let flags: Vec<&str> = it.map(|s| s.as_str()).collect();
-            let global = flags.contains(&"--global");
-            let adoptar = flags.contains(&"--adoptar-vivencias");
-            if let Some(desconocido) = flags.iter().find(|f| **f != "--global" && **f != "--adoptar-vivencias") {
-                eprintln!("error: opción desconocida '{desconocido}'");
-                eprintln!("uso: skillcheck install NOMBRE [--global] [--adoptar-vivencias]");
-                exit(2);
+            let uso = "uso: skillcheck install NOMBRE [--global | --destino DIR] [--adoptar-vivencias]";
+            let mut global = false;
+            let mut adoptar = false;
+            let mut proyecto: Option<PathBuf> = None;
+            while let Some(flag) = it.next() {
+                match flag.as_str() {
+                    "--global" => global = true,
+                    "--adoptar-vivencias" => adoptar = true,
+                    "--destino" => match it.next() {
+                        Some(dir) => proyecto = Some(PathBuf::from(dir)),
+                        None => {
+                            eprintln!("error: --destino necesita el directorio del proyecto\n{uso}");
+                            exit(2);
+                        }
+                    },
+                    otro => {
+                        eprintln!("error: opción desconocida '{otro}'\n{uso}");
+                        exit(2);
+                    }
+                }
             }
-            run_install(name, global, adoptar);
+            let destino = match (global, proyecto) {
+                (true, Some(_)) => {
+                    eprintln!("error: --global y --destino son excluyentes\n{uso}");
+                    exit(2);
+                }
+                (true, None) => Destino::Global,
+                (false, Some(p)) => Destino::Destino(fs::canonicalize(&p).unwrap_or(p)),
+                (false, None) => Destino::Proyecto,
+            };
+            run_install(name, destino, adoptar);
+        }
+        Some("instalaciones") => run_instalaciones(it.next().map(|s| s.as_str())),
+        Some("refrescar") => {
+            let resto: Vec<&str> = it.map(|s| s.as_str()).collect();
+            let adoptar = resto.contains(&"--adoptar-vivencias");
+            let objetivo: Vec<&str> = resto.into_iter().filter(|a| *a != "--adoptar-vivencias").collect();
+            match objetivo.as_slice() {
+                ["--todas"] => run_refrescar(None, adoptar),
+                [nombre] if !nombre.starts_with('-') => run_refrescar(Some(nombre), adoptar),
+                _ => {
+                    eprintln!("uso: skillcheck refrescar NOMBRE|--todas [--adoptar-vivencias]");
+                    exit(2);
+                }
+            }
         }
         Some("lint") => match it.next() {
             Some(dir) => run_lint(&[PathBuf::from(dir)]),
@@ -618,6 +856,21 @@ mod tests {
         let ruta = raiz.join(relativo);
         fs::create_dir_all(ruta.parent().unwrap()).unwrap();
         fs::write(ruta, contenido).unwrap();
+    }
+
+    #[test]
+    fn reconoce_una_fuente_enlazada_a_su_propio_destino() {
+        let raiz = arbol_temporal("enlace");
+        let real = raiz.join("proyecto/.claude/skills/x");
+        escribir(&real, "SKILL.md", "---\nname: x\ndescription: y\n---\n");
+        let enlace = raiz.join("priv-skills/x");
+        fs::create_dir_all(enlace.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&real, &enlace).unwrap();
+
+        assert!(mismo_directorio(&enlace, &real));
+        assert!(!mismo_directorio(&enlace, &raiz.join("otro/.claude/skills/x")),
+            "un destino que todavía no existe no puede ser la fuente");
+        fs::remove_dir_all(&raiz).unwrap();
     }
 
     #[test]
@@ -651,6 +904,51 @@ mod tests {
         assert!(archivos_solo_en_destino(&source, &dest).unwrap().is_empty(),
             "un archivo con contenido distinto no está en riesgo: install lo sobrescribe con la fuente");
         fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn el_registro_no_duplica_la_misma_copia_y_ordena() {
+        let raiz = arbol_temporal("registro");
+        let registro = raiz.join("instalaciones.tsv");
+        registrar_instalacion(&registro, "zeta", Path::new("/p/.claude/skills/zeta")).unwrap();
+        registrar_instalacion(&registro, "alfa", Path::new("/q/.claude/skills/alfa")).unwrap();
+        registrar_instalacion(&registro, "zeta", Path::new("/p/.claude/skills/zeta")).unwrap();
+        let filas = leer_registro(&registro);
+        assert_eq!(filas, vec![
+            ("alfa".to_string(), PathBuf::from("/q/.claude/skills/alfa")),
+            ("zeta".to_string(), PathBuf::from("/p/.claude/skills/zeta")),
+        ]);
+        fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn el_estado_ignora_el_marcador_y_detecta_copias_viejas() {
+        let raiz = arbol_temporal("estado");
+        let fuente = raiz.join("fuente");
+        let copia = raiz.join("copia");
+        escribir(&fuente, "SKILL.md", "v2");
+        escribir(&copia, "SKILL.md", "v2");
+        escribir(&copia, ".factoria-origen", "/ruta/a/la/fuente");
+        assert_eq!(estado_copia(&fuente, &copia), "al_dia", "el marcador no es una diferencia");
+        escribir(&fuente, "SKILL.md", "v3");
+        assert_eq!(estado_copia(&fuente, &copia), "desactualizada");
+        assert_eq!(estado_copia(&fuente, &raiz.join("no-esta")), "no_existe");
+        fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn excluye_de_git_una_sola_vez_y_segun_la_raiz() {
+        let raiz = arbol_temporal("exclude");
+        fs::create_dir_all(raiz.join(".git")).unwrap();
+        let publica = excluir_de_git(&raiz, "demo", false).unwrap();
+        assert_eq!(publica, vec!["/.claude/skills/demo/vivencias/", "/.claude/skills/demo/.factoria-origen"]);
+        assert!(excluir_de_git(&raiz, "demo", false).unwrap().is_empty(), "no repite patrones");
+        assert_eq!(excluir_de_git(&raiz, "mia", true).unwrap(), vec!["/.claude/skills/mia/"],
+            "una skill personal se excluye entera");
+        let sin_git = arbol_temporal("exclude-sin-git");
+        assert!(excluir_de_git(&sin_git, "demo", false).unwrap().is_empty(), "sin .git no toca nada");
+        fs::remove_dir_all(&raiz).unwrap();
+        fs::remove_dir_all(&sin_git).unwrap();
     }
 
     #[test]

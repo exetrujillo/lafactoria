@@ -62,3 +62,7 @@ skills/*/vivencias/
 # eso el patrón ignora `/*` y no el directorio, que git ni siquiera recorrería.
 /priv-skills/*
 !/priv-skills/.gitkeep
+
+# Registro local de copias instaladas (`skillcheck install` / `instalaciones` /
+# `refrescar`). Contiene rutas absolutas de esta máquina: nunca se versiona.
+/instalaciones.tsv

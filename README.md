@@ -350,6 +350,22 @@ con `--global` y se la usa desde otro proyecto— `skillcheck install` deja en l
 copia un archivo `.factoria-origen` con la ruta absoluta del directorio de
 origen.
 
+La relación inversa la guarda `instalaciones.tsv`, en la raíz del repo y fuera
+de git: cada `install` anota ahí dónde dejó la copia, y `skillcheck
+instalaciones` / `skillcheck refrescar` la usan para mostrar qué copias quedaron
+atrás de su fuente y reinstalarlas donde estaban. El registro es central y no
+vive en `vivencias/` de cada skill porque `install` copia `vivencias/` a cada
+destino: un registro ahí esparciría las rutas absolutas de esta máquina por
+todos los proyectos donde la skill esté instalada.
+
+`install --destino DIR` instala en el `.claude/skills` de otro proyecto. Si ese
+proyecto es un repositorio git, `install` agrega a su `.git/info/exclude` —local
+a la máquina, a diferencia del `.gitignore`, que es del equipo del proyecto— la
+copia entera cuando la skill es personal, y solo `vivencias/` y
+`.factoria-origen` cuando es pública. Es el principio 2 aplicado al destino: lo
+que no sale de esta máquina desde `priv-skills/` tampoco debe salir por la
+puerta de atrás del repo donde se instaló.
+
 ## Instalación
 
 La única skill que es un requisito para este repo es **forjador**. Por allí pasa
@@ -375,6 +391,7 @@ comandos está en `CLAUDE.md`.
 | `skills/<nombre>/vivencias/` | Ajustes, índice y registro de uso de este usuario | No |
 | `priv-skills/<nombre>/` | Skills personales de quien clonó el repo, con la misma estructura interna | No |
 | `.claude/skills/<nombre>/` | Copia instalada: lo que los agentes realmente leen | Sólo `forjador`, como bootstrap |
+| `instalaciones.tsv` | Registro local de dónde quedó cada copia instalada | No |
 | `src/main.rs` | El binario `skillcheck` | Sí |
 | `docs/experimentos/` | Análisis y conclusiones de los experimentos de las skills principales | Sí |
 | `experimentos/` | Corridas crudas y ledgers de `prueba-y-error` | No |
@@ -388,7 +405,9 @@ y `priv-skills/` es el mismo principio aplicado a la skill entera.
 
 **Fuente contra copia instalada:** si editas una skill en su raíz, hay que
 volver a correr `install` para que el cambio se refleje. Hasta entonces no tiene
-ningún efecto sobre las conversaciones. Es el error más frecuente del repo.
+ningún efecto sobre las conversaciones. Es el error más frecuente del repo:
+`skillcheck instalaciones` muestra qué copias quedaron atrás y `skillcheck
+refrescar NOMBRE` (o `--todas`) las pone al día.
 
 ## Jerarquía documental
 

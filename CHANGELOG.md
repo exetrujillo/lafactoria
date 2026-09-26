@@ -2,6 +2,21 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.1.0] - 2026-09-25
+
+### Agregado
+
+- **Registro de instalaciones.** Cada `skillcheck install` anota en `instalaciones.tsv` (raíz del repo, fuera de git) dónde dejó la copia. Hasta ahora la relación era de un solo sentido: `.factoria-origen` le dice a la copia cuál es su fuente, pero la fuente no sabía dónde tenía copias, y editar una skill sin reinstalarla en todos lados es el error más frecuente del repo. El registro es central y no vive en `vivencias/` de cada skill porque `install` copia `vivencias/` a cada destino: un registro ahí esparciría las rutas absolutas de esta máquina por todos los proyectos donde la skill esté instalada.
+- `skillcheck instalaciones [NOMBRE]` compara cada copia registrada con su fuente (`al_dia`, `desactualizada`, `no_existe`, `sin_fuente`). Al sembrar el registro con las copias existentes apareció de inmediato una copia global desactualizada.
+- `skillcheck refrescar NOMBRE|--todas` reinstala en su mismo lugar las copias desactualizadas, con la misma validación que `install` y deteniéndose en la primera que falle.
+- `skillcheck install NOMBRE --destino DIR` instala en el `.claude/skills` de otro proyecto. Antes la única alternativa a este repo era `--global`, así que una skill pensada para un solo proyecto quedaba disponible en todos o no quedaba en ninguno. Si el destino es un repositorio git, `install` agrega a su `.git/info/exclude` la copia entera si la skill es personal, o solo `vivencias/` y `.factoria-origen` si es pública. Se usa `.git/info/exclude`, local a la máquina, y no el `.gitignore` del proyecto, que es de su equipo.
+
+### Cambiado
+
+- `directories_equal` ignora `.factoria-origen` y `__pycache__` en los dos lados, no solo en la fuente, para poder comparar una copia ya instalada (que lleva el marcador) con su fuente.
+- `install` se niega cuando la fuente y el destino resuelven al mismo directorio. Pasa si `priv-skills/<nombre>` es un enlace a la copia de otro proyecto y se instala con `--destino` en ese proyecto: `install` borraba el destino antes de copiar, así que eliminaba la fuente, y la comprobación de vivencias en riesgo no lo veía porque comparaba el directorio consigo mismo.
+- `forjador` contempla en su apertura la skill que vive fuera de la factoría (en el `.claude/skills/` de otro proyecto), y su paso 7 documenta `--destino`, `instalaciones` y `refrescar`.
+
 ## [2.0.1] - 2026-09-23
 
 ### Corregido
