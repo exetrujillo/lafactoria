@@ -51,13 +51,22 @@ Estados:
 - `not_a_pdf`: la fuente respondió, pero el cuerpo no era un PDF.
 - `unreadable_pdf`: el cuerpo parecía PDF, pero el extractor no pudo abrirlo.
 - `limit_exceeded`: no se incorporó por alcanzar un límite de archivos o bytes.
-- `blocked_challenge`: el proveedor respondió con un challenge anti-bot
-  (Cloudflare `cf-mitigated: challenge` o `server-timing: chlray`). Es terminal
+- `blocked_challenge`: el proveedor respondió con un challenge anti-bot: las
+  cabeceras de Cloudflare `cf-mitigated: challenge` o `server-timing: chlray`, o
+  un cuerpo HTML cuyo `<title>` es el de una página de challenge conocida
+  (Anubis, "Client Challenge", "Just a moment..."). Es terminal
   y distinto de `http_error`: ninguna combinación de cabeceras lo pasa, así que
   no se reintenta por HTTP ni se prueban otras ubicaciones del mismo proveedor.
   La salida es buscar una copia en otro host, no insistir.
 - `http_error`: todas las ubicaciones fallaron en transporte o status HTTP.
 - `failed`: fallo local al mover, registrar o calcular SHA-256.
+- `rejected`: lo escribe el orquestador, nunca el binario. El archivo pasó la
+  comprobación de PDF pero no es la obra (otra obra, un fragmento, muchas menos
+  páginas de las esperadas) o no pasó la indexación de `biblio-rata`. `reason`
+  dice por qué, y el archivo sale de la biblioteca para que el índice no lo
+  tome por la obra. `descargar` sólo omite las identidades `accepted`, así que
+  una fila `rejected` se vuelve a intentar: corrige antes su ubicación en el
+  catálogo o márcala `descartado`, o la próxima corrida baja lo mismo.
 
 El manifiesto es la fuente de trazabilidad, no el índice de `biblio-rata`.
 `path` identifica el archivo local; `source_url` identifica su procedencia.
@@ -77,8 +86,8 @@ las columnas de entrada o en un registro bibliográfico paralelo, sin inventar
 valores ausentes.
 
 Un `accepted` todavía debe pasar la indexación incremental de `biblio-rata`. Si la extracción
-de texto falla, cambia el estado a rechazado o a una categoría de revisión
-explícita; no lo presentes como documento citable.
+de texto falla, cambia el estado a `rejected`; no lo presentes como documento
+citable.
 
 El resultado de un scraper de descubrimiento es distinto del manifiesto de
 incorporación. En particular, `openalex.tsv` solo contiene candidatos

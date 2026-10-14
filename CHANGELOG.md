@@ -2,6 +2,29 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.4.0] - 2026-10-12
+
+### Agregado
+
+- **Captcha manual en `chatarrero`.** Cuando un captcha no cede a la automatización, la skill ofrece que el usuario lo resuelva a mano en una ventana visible y sigue con esa sesión, en el mismo navegador o bajando al nivel 2 con el par cookie + User-Agent. Hasta ahora, un captcha que el navegador anti-bot no pasaba era el final de la cascada, aunque quien pidió los datos estuviera frente a la pantalla. El nuevo `references/captcha-manual.md` fija cuándo corresponde (captcha interactivo o nivel 5 automático fallido, nunca un login), qué requiere (un display que el usuario vea; por SSH, reenvío X o VNC) y el procedimiento: esperar el contenido y no la ausencia del captcha, exportar cookie y UA como una unidad y volver a pedir cuando caduca. Incluye un esqueleto con `nodriver` verificado contra su código fuente. El puente del nivel 5 al 2, que figuraba como pendiente, queda documentado en su versión con resolución humana.
+- `cascada.md` suma al nivel 5 cuatro herramientas anti-bot —zendriver, Patchright, Camoufox y el UC/CDP Mode de SeleniumBase— con licencia, API mínima y cuándo conviene cada una. Quedan marcadas "sin medición propia" hasta que un sondeo las pruebe. Los servicios de resolución pagados quedan como opción sólo con decisión explícita del usuario.
+- `chatarrero` lee el estado serializado de Angular con renderizado en servidor (`ng-state`) antes de subir de nivel. Ese estado lista las URLs de API que consultó el servidor, y en un sitio cuyo bundle no mostraba ningún endpoint resolvió el nivel 0 con una sola petición. El nivel 4 matiza su señal de cáscara: una SPA con SSR trae texto visible parcial y no es una cáscara.
+- **Sub-bibliotecas temáticas en `pulpo-librero`.** Un proyecto con temas distintos tiene una sub-biblioteca autónoma por tema en `docs/literatura/<tema>/`. La compuerta presenta las que ya existen y pregunta a cuál va la ronda, con un criterio para abrir una nueva. También queda documentado cómo copiar obras entre bibliotecas, que antes no tenía procedimiento.
+- `pulpo descargar` reconoce un challenge por el `<title>` del cuerpo además de por las cabeceras. Anubis, el "Client Challenge" de Springer y la prueba en JavaScript de PMC llegaban con `200` y sin cabeceras de Cloudflare, así que quedaban como `not_a_pdf` y mandaban a raspar una landing que no existía. Se probó contra una URL que en una ronda anterior había quedado como `not_a_pdf`: ahora queda como `blocked_challenge`.
+- `references/contrato.md` lista el estado `rejected`, que escribe el orquestador cuando un PDF válido no es la obra; ya se usaba en manifiestos reales sin figurar en el contrato. `references/fuentes.md` documenta cómo sacar el PDF de DSpace 7 por su API REST, porque su landing, una SPA, no trae el enlace.
+- `pulpo-librero` compara el número de páginas antes de aceptar una obra bajada de una URL armada a mano: un PDF válido de una página, el prefacio de un informe de 453, había pasado la comprobación del extractor.
+- `la-quinta-pata` corre el banco de pruebas también sobre documentos de instrucciones: corre los comandos que prescriben en un entorno desechable y mide sobre la población real lo que suponen de sus entradas. Al auditar un SKILL.md, eso encontró tres fallas de comandos que la lectura no veía y que 7 de 18 entradas reales no cumplían el supuesto de la skill, el hallazgo de mayor probabilidad.
+
+### Cambiado
+
+- **Las skills leen su `INDICE.md` al comenzar.** El README dice que el índice "se lee siempre", pero sólo `chatarrero` lo indicaba; las demás escribían el registro y nunca lo consultaban. La consecuencia quedó medida: una trampa registrada un día se repitió al siguiente con la entrada ya escrita. `biblio-rata`, `forjador`, `la-quinta-pata`, `prueba-y-error` y `pulpo-librero` suman el párrafo, y el paso 3 de `forjador` lo exige a toda skill nueva. Es el diagnóstico de 1.23.0 aplicado a la otra mitad: una skill que no dice cuándo leer, no lee.
+
+### Corregido
+
+- `ledger.py` de `prueba-y-error` comparaba las fuentes del resultado con las del plan respetando el orden. El recibo guarda los casos en orden lexicográfico (`s1, s10, s2`), así que un plan con ids en orden natural rechazaba todos los resultados aunque los conjuntos fueran idénticos; costó dos linajes descartados. Ahora compara conjuntos, y la autoprueba usa ids sin ceros a la izquierda, el caso que el fixture anterior ocultaba. `validar_resultado` corre antes de esa comparación, para que una forma inválida dé su propio error.
+- `pulpo buscar` recalculaba la identidad de cada fila con `--source` aunque la entrada fuera el catálogo de otra biblioteca. Las obras sin DOI quedaban como `<corpus>:arxiv:...` y no casaban con su fila del manifiesto, sin ningún aviso. Ahora respeta la columna `identity` cuando viene.
+- `cascada.md` nombraba `tab.cf_verify()`, pero el método de `nodriver` es `verify_cf()`, y su plantilla incluida es la del checkbox en inglés.
+
 ## [2.3.0] - 2026-09-26
 
 ### Corregido

@@ -12,6 +12,7 @@ El nivel más barato y estable. Se busca antes que nada.
 - **Burst-rate con auto-limpieza**: ráfagas largas daban 403 que se limpiaba solo en ~25–30 s → encolar esas páginas y reintentarlas una vez tras el pase principal con fail-fast (`max_attempts=1`).
 - **CGIs de búsqueda de CMS** (tipo Prontus): POST form-urlencoded con UA de navegador + `Referer` del propio sitio + `Content-Type` correcto; si falta alguno devuelven HTTP 200 con 0 bytes.
 - El fin real de paginación WordPress es HTTP **400**, no cualquier excepción.
+- **Angular con SSR: leer el `ng-state` antes de subir de nivel** (una medición, sobre un mecanismo propio del framework). Una app de Angular renderizada en servidor serializa en `<script id="ng-state" type="application/json">` (`serverApp-state` en versiones viejas) las respuestas HTTP que consultó al renderizar: un diccionario `hash → {u, b, s, h}` donde `u` es la URL exacta de la API y `b` su cuerpo JSON. Cargarlo y listar los `u` entregó la API completa (listado paginado, ficha por slug) con una sola petición, sin interceptar XHR ni levantar navegador; en el bundle principal no aparecía ningún endpoint, porque vivían en chunks perezosos. Los botones tipo "Expand" o "Load more" suelen ser paginación de esa misma API. Si la API mezcla datos personales (correos de editores, autores de la ficha) con el contenido, se excluyen del procesado y quedan sólo en el crudo local.
 
 ## Nivel 1 — RSS/feed
 
@@ -48,6 +49,8 @@ Cuando el HTML descargado no trae el dato pero el navegador lo muestra:
 
 Subir aquí solo con diagnóstico: HTML grande (≥2000 chars) pero <200 chars de texto visible = shell JS que inyecta contenido. Medido en producción: shells JS que parecían "sin datos" generaban identidades vacías en silencio.
 
+Matiz: una SPA renderizada en servidor no es una cáscara aunque el HTML pese cientos de KB. Trae texto visible, a veces sólo una parte del listado (medido: 5 de 19 ítems en el DOM), y el resto en el estado serializado. Antes de subir a este nivel, buscar ese estado (`ng-state` en el nivel 0).
+
 - `wait_until="domcontentloaded"` + settle fijo (~4 s), **nunca `networkidle`**: con analytics/ads/websockets nunca llega (medido: 41 s/it vs. fracción) y la documentación oficial de Playwright lo marca DISCOURAGED.
 - `page.add_locator_handler(locator, handler)` para overlays predecibles (banners de cookies, popups de registro): Playwright ejecuta el handler cada vez que el overlay aparece antes de una acción, y el scrape sigue sin intervención manual.
 - `ignore_https_errors=True`: sitios chicos con certificado vencido o de hostname equivocado son comunes (~28% de los fallos de render medidos).
@@ -65,10 +68,20 @@ Subir aquí solo con diagnóstico: HTML grande (≥2000 chars) pero <200 chars d
 - Flags: `headless=False`, `sandbox=False`/`--no-sandbox`, `--disable-dev-shm-usage`, `--disable-gpu` para Docker rootless.
 - **Playwright stealth** (`--disable-blink-features=AutomationControlled`, borrar `navigator.webdriver`, locale/timezone reales): probado en producción, **no bastó** contra Turnstile.
 - **`curl_cffi` con `impersonate="chrome"`**: probado, no bastó para el caso duro; puede servir para WAFs más blandos.
-- **`nodriver`** (undetected Chromium): el único que pasó Turnstile en nuestras pruebas. Race condition de arranque: reintentar el endpoint `version` de la API HTTP hasta 30×0,5 s. Proyecto activo; desde la versión 0.50 opera en "flat mode" e incluye iframes en `tab.find()`/`tab.select()`, así que puede localizar el checkbox "verify you are human" dentro del iframe del challenge; `tab.cf_verify()` lo encuentra y lo clickea solo (requiere `opencv-python`, solo fuera de expert mode), y `tab.bypass_insecure_connection_warning()` cubre certificados inválidos. Licencia AGPL-3.0: sin problema para herramientas privadas, pero ojo si el scraper se distribuye.
+- **`nodriver`** (undetected Chromium): el único que pasó Turnstile en nuestras pruebas. Race condition de arranque: reintentar el endpoint `version` de la API HTTP hasta 30×0,5 s. Proyecto activo; desde la versión 0.50 opera en "flat mode" e incluye iframes en `tab.find()`/`tab.select()`, así que puede localizar el checkbox "verify you are human" dentro del iframe del challenge; `tab.verify_cf()` lo encuentra por plantilla de imagen y lo clickea solo (requiere `opencv-python` y no funciona en expert mode; la plantilla incluida es la del checkbox en inglés, para otro idioma hay que recortar una propia), y `tab.bypass_insecure_connection_warning()` cubre certificados inválidos. Licencia AGPL-3.0: sin problema para herramientas privadas, pero ojo si el scraper se distribuye.
 - **Detección de challenge por markers**: título `"Just a moment..."`/"Un momento", contenido `cf-challenge`/`challenges.cloudflare.com` → polling (~1 s paso, 15 s techo) dejando que el navegador lo resuelva solo, luego backoff y reintento. `wait_selector` para re-capturar el DOM después del challenge.
 - Portada que a veces carga sin cards: re-navegar hasta 3 intentos.
 - **Si el bloqueo es a la automatización misma** (logins que bloquean CDP): Chromium real headful + sesión real persistida en volumen + extensión de navegador propia que manipula el DOM.
+- **Otras herramientas, sin medición propia.** Estado, licencia y API verificados en su documentación y su repositorio (2026-10, las cuatro con actividad reciente). Se prueban en el sondeo del paso 2 antes de adoptarlas:
+  - **zendriver**: fork comunitario de `nodriver`, con la misma API y arreglos que el original no integra. AGPL-3.0. Es la primera alternativa cuando `nodriver` falla por un bug y no por detección.
+  - **Patchright**: Playwright parchado contra las fugas de flags y `navigator.webdriver`, que se adopta cambiando el import. Sólo Chromium; el proyecto recomienda contexto persistente, `channel="chrome"` y no tocar headers ni UA. Apache-2.0. Conviene cuando el scraper ya está escrito en Playwright.
+  - **Camoufox**: Firefox con el fingerprint parchado en el binario, no inyectado por JS, que se maneja con la API de Playwright (`camoufox.sync_api.Camoufox`, después de `camoufox fetch`). Navegador MPL-2.0, paquete Python MIT. El propio proyecto advierte que no es estable para producción, así que hay que fijar versión. Sirve cuando la detección apunta a Chromium.
+  - **SeleniumBase UC Mode / CDP Mode**: `SB(uc=True)` con `uc_open_with_reconnect(url, reconnect_time=...)` y `uc_gui_click_captcha()`, que clickea con PyAutoGUI el checkbox de Turnstile o de reCAPTCHA; en Linux sin display, `SB(uc=True, xvfb=True)`. CDP Mode es su sucesor. MIT.
+- **Servicios de resolución pagados** (2Captcha, CapSolver y similares): resuelven por API captchas de imágenes a cambio de un costo por captcha. Sólo con decisión explícita del usuario, porque cuestan dinero y suelen chocar con los términos del sitio. Antes conviene el captcha manual (abajo), que no cuesta nada y lo resuelve quien pidió los datos.
+
+## Captcha manual — el usuario resuelve, el scraper sigue
+
+Cuando el captcha es interactivo (imágenes de reCAPTCHA o hCaptcha, un Turnstile que no se resuelve solo) o el nivel 5 automático no pasó, queda una vía que no depende de ganarle a la detección: abrir un navegador visible, que el usuario resuelva el captcha a mano y seguir con esa sesión, en el mismo navegador o bajando al nivel 2 con el puente de abajo. Requisitos, procedimiento y esqueleto en `captcha-manual.md`, en este mismo directorio.
 
 ## Cuándo NO subir de nivel
 
@@ -80,8 +93,10 @@ Subir aquí solo con diagnóstico: HTML grande (≥2000 chars) pero <200 chars d
 
 ### Puente del nivel 5 al nivel 2: cosechar la cookie de clearance
 
-Pendiente de implementar; es la evolución natural de este nivel y la que más
-ahorra en lotes grandes.
+Patrón documentado, todavía sin implementación medida; es la evolución natural
+de este nivel y la que más ahorra en lotes grandes. Con el challenge resuelto
+por el usuario en vez de por el navegador, el procedimiento completo está en
+`captcha-manual.md`.
 
 El error de diseño frecuente es tratar el nivel 5 como un modo: se prende el
 navegador y **todo** el lote pasa por ahí, a decenas de segundos por ítem. No

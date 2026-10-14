@@ -354,6 +354,11 @@ directorio es la fuente. Si el marcador apunta a una ruta que ya no existe,
 lee `vivencias/` de la copia sin escribir nada y avísale al usuario que
 reinstale la skill desde donde esté ahora su fuente.
 
+Al comenzar, lee `vivencias/INDICE.md`, que tiene una línea por cada
+hallazgo registrado, y abre la entrada de `vivencias/registro/` que nombra una
+línea sólo si toca la tarea en curso. Escribir el registro sin leerlo no sirve:
+una trampa ya documentada se repite igual.
+
 Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus defaults del
 analizador: `confianza` (0.95), `remuestreos` (10000) y `alpha` (0.05). Estos
 valores pueden cambiarse de forma estable entre experimentos; la corrección y

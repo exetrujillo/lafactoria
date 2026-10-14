@@ -136,18 +136,20 @@ def agregar_registro(ledger, contrato, registro, tipo):
         plan = buscar_registro(registros, "plan", clave)
         if plan is None:
             raise ValueError("resultado huérfano: no existe un plan previo bajo el linaje vigente")
+        validar_resultado(registro)
         if registro.get("test_aplicado") != plan.get("test_declarado"):
             raise ValueError(
                 f"test_aplicado no coincide con test_declarado del plan: "
                 f"declarado={plan.get('test_declarado')!r} "
                 f"aplicado={registro.get('test_aplicado')!r}"
             )
-        if registro.get("fuentes") != plan.get("fuentes"):
+        # el recibo guarda los casos en orden lexicográfico (s1, s10, s2) y el plan
+        # en el que se declararon: lo que tiene que coincidir es el conjunto.
+        if sorted(registro["fuentes"]) != sorted(plan.get("fuentes") or []):
             raise ValueError(
                 f"fuentes del resultado no coinciden con las declaradas en el plan: "
                 f"declaradas={plan.get('fuentes')!r} resultado={registro.get('fuentes')!r}"
             )
-        validar_resultado(registro)
     elif tipo == "diagnostico":
         # la interpretación necesita el dato ya escrito. Sin resultado previo no
         # hay nada que diagnosticar, y un segundo diagnóstico dejaría dos lecturas

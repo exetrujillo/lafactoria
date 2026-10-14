@@ -52,7 +52,10 @@ fn run_search(args: &[String]) {
         let id = get_any(&get, &["openalex_id", "id"]);
         let doi = normalize_doi(&get("doi"));
         if id.is_empty() && doi.is_empty() { continue; }
-        let identity = if !doi.is_empty() { format!("doi:{doi}") } else { format!("{}:{}", clean_value(&source), id) };
+        // El catálogo de otra biblioteca ya trae su identidad. Recalcularla con
+        // `--source` cambia la de toda obra sin DOI y la desconecta de su manifiesto.
+        let heredada = get("identity");
+        let identity = if !heredada.is_empty() { heredada } else if !doi.is_empty() { format!("doi:{doi}") } else { format!("{}:{}", clean_value(&source), id) };
         let values = vec![identity.clone(), id, get("title"), doi, get("year"), get("is_oa"), get("oa_status"), get("license"), get("version"), get("landing_url"), get("pdf_url"), get("pdf_urls"), get("abstract"), format!("{}@{}", source, now), now.clone(), "pendiente".to_string(), String::new()];
         if let Some(existing) = catalog.iter_mut().find(|old| old[0] == identity) {
             let decision = existing[15].clone();
@@ -173,7 +176,9 @@ fn run_download(args: &[String]) {
                             downloaded = true;
                             break;
                         }
-                        PdfValidation::NotPdf => { non_pdf = true; }
+                        PdfValidation::NotPdf => {
+                            if fs::read(&temp_path).map(|cuerpo| es_titulo_de_challenge(&cuerpo)).unwrap_or(false) { challenged = true; } else { non_pdf = true; }
+                        }
                         PdfValidation::Unreadable => { unreadable_pdf = true; }
                         PdfValidation::Unavailable => { validator_unavailable = true; }
                     }
@@ -378,6 +383,21 @@ fn is_bot_challenge(headers: &str) -> bool {
     lower.contains("cf-mitigated: challenge") || lower.contains("server-timing: chlray")
 }
 
+/// Títulos medidos de páginas de challenge que llegan con `200` y sin las
+/// cabeceras de `is_bot_challenge`: Cloudflare sin `cf-mitigated`, Anubis, el
+/// "Client Challenge" de Springer y la prueba en JS de PMC. Sin mirar el título
+/// quedaban como `not_a_pdf`, que manda a raspar una landing que no existe.
+const TITULOS_CHALLENGE: [&str; 4] = ["just a moment", "client challenge", "making sure you", "preparing to download"];
+
+fn es_titulo_de_challenge(cuerpo: &[u8]) -> bool {
+    let inicio = String::from_utf8_lossy(&cuerpo[..cuerpo.len().min(8192)]).to_lowercase();
+    let Some(desde) = inicio.find("<title") else { return false };
+    let Some(abre) = inicio[desde..].find('>') else { return false };
+    let titulo = &inicio[desde + abre + 1..];
+    let titulo = titulo[..titulo.find("</title").unwrap_or(titulo.len())].trim_start();
+    TITULOS_CHALLENGE.iter().any(|marca| titulo.starts_with(marca))
+}
+
 fn download(url: &str, output: &Path, allowed_hosts: &[String], max_bytes: u64, user_agent: &str) -> Result<DownloadResult, String> {
     let mut current = url.to_string();
     let mut previa: Option<String> = None;
@@ -475,4 +495,25 @@ fn safe_name(value: &str) -> String {
 fn write_row(out: &mut impl Write, id: &str, title: &str, url: &str, path: &str, status: &str, reason: &str, bytes: u64, hash: &str) {
     let clean = |value: &str| value.replace('\t', " ").replace('\n', " ").replace('\r', " ");
     let _ = writeln!(out, "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", clean(id), clean(title), clean(url), clean(path), clean(status), clean(reason), bytes, clean(hash));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reconoce_los_titulos_de_challenge_medidos() {
+        assert!(es_titulo_de_challenge(b"<html><head><title>Client Challenge</title>"));
+        assert!(es_titulo_de_challenge(b"<title>Making sure you&#39;re not a bot!</title>"));
+        assert!(es_titulo_de_challenge(b"<TITLE lang=\"en\">\n  Just a moment...</TITLE>"));
+        assert!(es_titulo_de_challenge(b"<title>Preparing to download ...</title>"));
+    }
+
+    #[test]
+    fn una_landing_comun_no_es_challenge() {
+        assert!(!es_titulo_de_challenge(b"<title>Accent mark and visual word recognition</title>"));
+        assert!(!es_titulo_de_challenge(b"<title>Waiting: just a moment of history</title>"));
+        assert!(!es_titulo_de_challenge(b"<p>Just a moment</p>"));
+        assert!(!es_titulo_de_challenge(b""));
+    }
 }

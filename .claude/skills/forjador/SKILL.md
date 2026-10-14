@@ -144,6 +144,14 @@ El esqueleto del paso 2 no alcanza para esto: crea los archivos, no el hábito.
 Una skill que sólo lee `ajustes.json` cumple un tercio del contrato de
 `vivencias/` y nunca acumula nada en `registro/`.
 
+El tercio que falta es la lectura: la sección "Vivencias propias" tiene que
+mandar a leer `vivencias/INDICE.md` al comenzar, y a abrir una entrada de
+`registro/` sólo cuando su línea toque la tarea. Una skill que escribe el
+registro pero nunca lo consulta repite la trampa que ya documentó; pasó con un
+error de orden de identificadores que costó dos rondas descartadas y volvió a
+aparecer al día siguiente con la entrada ya escrita. Copia el párrafo "Al
+comenzar, lee `vivencias/INDICE.md`" de cualquiera de las skills del repo.
+
 La sección "Vivencias propias" abre con el párrafo "Dónde están las
 vivencias", copiado tal cual de cualquiera de las seis skills: le indica al
 agente que resuelva `vivencias/` contra la fuente que marca `.factoria-origen`
@@ -314,6 +322,11 @@ escribe en `<fuente>/vivencias/`, nunca en la copia. Sin marcador, este
 directorio es la fuente. Si el marcador apunta a una ruta que ya no existe,
 lee `vivencias/` de la copia sin escribir nada y avísale al usuario que
 reinstale la skill desde donde esté ahora su fuente.
+
+Al comenzar, lee `vivencias/INDICE.md`, que tiene una línea por cada
+hallazgo registrado, y abre la entrada de `vivencias/registro/` que nombra una
+línea sólo si toca la tarea en curso. Escribir el registro sin leerlo no sirve:
+una trampa ya documentada se repite igual.
 
 `forjador` declara una clave en su propio `vivencias/ajustes.json`:
 `registro_lenguaje` (string) — el registro en el que este usuario quiere que

@@ -9,7 +9,8 @@ description: >
   reconocimiento del sitio con subagentes de prueba puntuales para elegir el
   nivel más barato de la cascada de fetching —API o RSS, HTTP simple,
   endpoints descubiertos, render con Playwright o navegador anti-bot— antes
-  de escribir código.
+  de escribir código. Si un captcha no cede a la automatización, ofrece que el
+  usuario lo resuelva a mano en una ventana visible y sigue con esa sesión.
 ---
 
 # Chatarrero
@@ -80,12 +81,13 @@ con tácticas probadas en proyectos reales, en references/cascada.md.
 
 | Nivel | Técnica | Sube si... |
 |---|---|---|
-| 0 | API o web service oficial | no existe o bloquea |
+| 0 | API o web service oficial (o la que delata el estado SSR) | no existe o bloquea |
 | 1 | RSS/feed con cuerpo completo | feed solo trae resumen |
 | 2 | HTTP simple (requests/axios + parser) | 403 persistente, challenge, cuerpo vacío |
 | 3 | Endpoints descubiertos (interceptar tráfico XHR) | el dato solo existe tras JS |
 | 4 | Render Playwright (SPA) | hay WAF/anti-bot que detecta headless |
-| 5 | Navegador anti-bot (headful + Xvfb / sesión real) | último recurso |
+| 5 | Navegador anti-bot (headful + Xvfb / sesión real) | el captcha no cede a la automatización |
+| 5b | Captcha manual: el usuario resuelve en una ventana visible | no hay display o el usuario no está |
 
 También hay que saber **cuándo ya no queda una vía técnica razonable**: DNS
 muerto, caché de CDN del lado del servidor y límites del servidor no siempre se
@@ -94,7 +96,9 @@ una descarga: si el usuario pidió el recurso, se intenta la cascada disponible,
 se registran las condiciones de acceso y se informa el resultado. Solo se detiene
 por una causa técnica terminal, por el tope declarado o porque falta una
 credencial que la skill no puede inventar y que no encontramos documentada en 
-ninguna parte usando herramientas de navegación web. Esos casos y todos los
+ninguna parte usando herramientas de navegación web. Un captcha que la
+automatización no pasa no es terminal mientras el usuario pueda resolverlo a
+mano: ofrécelo antes de declarar el bloqueo (ver references/captcha-manual.md). Esos casos y todos los
 hallazgos fechados están indexados en vivencias/INDICE.md; abre la entrada correspondiente en
 vivencias/registro/ antes de sondear y actualízala cuando un sondeo nuevo
 cambie algo.
@@ -103,6 +107,9 @@ cambie algo.
 
 - **Crudo siempre**: guardar la respuesta original junto al output procesado;
   es la evidencia citable y lo que permite reparsear sin re-descargar.
+- **Sesiones fuera del repo**: perfiles de navegador, cookies y archivos de
+  sesión son secretos. Viven fuera de git y nunca entran al crudo, al log ni a
+  la bitácora.
 - **Clasificar el error antes de reintentar**: ssl/conexión/transitorio se
   reintenta con backoff; un 4xx se registra con su evidencia y no se declara
   terminal hasta probar las rutas alternativas previstas para la fuente. Un

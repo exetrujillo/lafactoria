@@ -48,7 +48,7 @@ r = random.Random(semilla)
 with open(salida, "w") as f:
     for i in range(30):
         base = random.Random(1000 + i).gauss(0.55, 0.12)
-        f.write(json.dumps({"candidato": candidato, "caso": f"q{i:02d}",
+        f.write(json.dumps({"candidato": candidato, "caso": f"q{i}",
                             "valor": round(base + ventaja + r.gauss(0, 0.04), 4)}) + "\\n")
 """
 FALLOS = []
@@ -69,7 +69,7 @@ def montar(raiz, ventaja):
     (exp / "presupuesto.json").write_text(json.dumps({
         "max_corridas": 10, "max_segundos": 600, "max_consultas_banco": 200,
         "max_rondas": 5, "max_consultas_adaptativas": 60}), encoding="utf-8")
-    (exp / "fuentes.json").write_text(json.dumps({"ids": [f"q{i:02d}" for i in range(30)]}), encoding="utf-8")
+    (exp / "fuentes.json").write_text(json.dumps({"ids": [f"q{i}" for i in range(30)]}), encoding="utf-8")
     (raiz / "protocolo.py").write_text(PROTOCOLO, encoding="utf-8")
     (exp / "ronda.json").write_text(json.dumps({
         "iteracion": 1, "fase": "A", "contrato": "EXP/contrato.md",

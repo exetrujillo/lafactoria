@@ -159,7 +159,8 @@ la diferencia se ve en la cabecera `cf-mitigated`, no en el status.
 
 El descargador detecta este caso y lo marca `blocked_challenge`, que es
 terminal. **No subas a Playwright por esto**: el costo no se justifica cuando la
-misma obra suele estar en un repositorio institucional.
+misma obra suele estar en un repositorio institucional. Si no hay espejo, la vía
+es el captcha manual de `chatarrero`, con el usuario resolviendo el challenge.
 
 ### El estado de un proveedor caduca: revisa antes de confiar en la ronda pasada
 
@@ -181,14 +182,33 @@ verifica a dónde resuelve el DOI ahora antes de dar por rota la obra.
 El repositorio de la Universidad de Zúrich responde `200` con
 `<title>Making sure you're not a bot!</title>` y hojas de estilo de
 `within.website/x/xess`: es **Anubis**, una prueba de trabajo, no Cloudflare.
-Las señales que mira `is_bot_challenge` (`cf-mitigated`, `server-timing: chlray`)
-**no lo detectan**, así que el descargador lo registra como `http_error` o
-`unreadable_pdf` según qué haya llegado, y no como `blocked_challenge`.
+Las cabeceras que mira `is_bot_challenge` (`cf-mitigated`, `server-timing: chlray`)
+no lo delatan; desde 2.4.0 el descargador lo reconoce por el `<title>` del cuerpo
+y lo registra como `blocked_challenge` (ver la sección siguiente).
 
 Dos consecuencias prácticas: el PDF directo por `id/eprint/NNNN/1/archivo.pdf`
 tampoco pasa (devolvió `500`), y conviene buscar la obra en otro repositorio.
 Medido: *Accent mark and visual word recognition in Spanish* está bloqueada en
 Zora y se obtuvo entera en `access.archive-ouverte.unige.ch` (562 KB).
+
+### Challenges que sólo se ven en el título
+
+Varios challenges llegan con `200 text/html` y sin ninguna cabecera de
+Cloudflare, así que por las cabeceras parecen una landing más. Medidos sobre
+obras declaradas abiertas, en dos rondas distintas:
+
+- `link.springer.com` (y SpringerOpen, que redirige ahí):
+  `<title>Client Challenge</title>` y "Please enable JavaScript";
+- `pmc.ncbi.nlm.nih.gov/.../pdf/`: `<title>Preparing to download ...`, una
+  prueba en JavaScript;
+- Zora: `<title>Making sure you're not a bot!</title>` (Anubis, arriba).
+
+`pulpo descargar` compara el `<title>` del cuerpo con esos títulos y con el
+"Just a moment..." de Cloudflare, y los marca `blocked_challenge`: terminal,
+la salida es otro host. Lo que no ve es un `403` con "Just a moment..." y sin
+`cf-mitigated`, porque con `curl --fail` el cuerpo de un `403` no se guarda.
+Ese caso sigue cayendo en `http_error`, y si es la única pista, mirar el
+cuerpo con un `curl` a mano lo aclara.
 
 ### La salida: repositorios institucionales
 
@@ -201,7 +221,8 @@ Dos cuidados:
 
 - OpenAlex y Unpaywall suelen traer la landing del repositorio pero con
   `url_for_pdf` vacío. Hay que raspar la landing y extraer el enlace: en DSpace
-  es un `href` con `/bitstreams/.../download`; en Pure, `/files/NNNN/*.pdf`; en
+  6 o anterior es un `href` con `/bitstreams/.../download` (DSpace 7 no lo
+  trae, ver abajo); en Pure, `/files/NNNN/*.pdf`; en
   **OJS** —que es casi toda la revista universitaria hispana— la landing es
   `/article/view/N` y el PDF cuelga de `/article/download/N/M`, con un segundo
   identificador que no se puede adivinar y hay que leer del HTML.
@@ -215,3 +236,22 @@ Dos cuidados:
   (DSpace) entregó sin fricción, mientras que `research.aalto.fi` (Pure), de la
   *misma universidad*, está también tras Cloudflare y devolvió el mismo "Just a
   moment...". El host se evalúa caso a caso.
+
+### DSpace 7: el PDF sale de la API REST
+
+En DSpace 7 la landing es una SPA de Angular: el HTML servido no trae
+`citation_pdf_url` ni un `href` a `/bitstreams/`, así que rasparla no da nada y
+el descargador la registra como `not_a_pdf`. El PDF sale de la API REST, sin
+credenciales:
+
+1. `GET /server/api/pid/find?id=hdl:<handle>` resuelve el handle al ítem y da su
+   `uuid`. Si la landing ya es `/items/<uuid>`, este paso sobra.
+2. `GET /server/api/core/items/<uuid>/bundles?embed=bitstreams`: en el bundle
+   `ORIGINAL`, cada bitstream trae `_links.content.href`.
+3. Esa URL (`.../core/bitstreams/<uuid>/content`) va como `pdf_url` de la fila
+   del catálogo y `descargar` la baja como cualquier otra.
+
+Medido en una ronda sobre tres repositorios institucionales, con nueve obras
+resueltas así, y vuelto a ver en otra ronda sobre dos repositorios más. Un `401`
+del bitstream por esta misma vía pide credencial: es un no definitivo, no un
+bloqueo técnico.

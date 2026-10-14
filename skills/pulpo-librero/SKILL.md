@@ -28,8 +28,10 @@ adaptadores, manifiesto y criterios bibliográficos.
 Antes de buscar o descargar, pregunta en una sola tanda:
 
 1. ¿Qué tema, autores, títulos, identificadores o colección se busca?
-2. ¿En qué directorio vive la biblioteca y qué límite de cantidad, tamaño o
-   tiempo tiene la corrida?
+2. ¿En qué biblioteca entra la ronda y qué límite de cantidad, tamaño o tiempo
+   tiene la corrida? Antes de preguntar, busca las que ya tiene el proyecto
+   (cada `catalogo.tsv` bajo `docs/literatura/`) y preséntalas: la ronda va a
+   una de ellas o abre una sub-biblioteca nueva (ver "Sub-bibliotecas").
 3. ¿Qué fuentes abiertas se autorizan? Si no se especifica, propone arXiv,
    OpenAlex e Internet Archive según se trate de papers o libros.
 4. ¿Se quieren obras nuevas, versiones concretas o una lista cerrada de URLs?
@@ -55,10 +57,54 @@ credenciales, para y marca el proveedor como bloqueado.
 Escalar cuesta cortesía además de tokens: mantén las pausas entre peticiones y
 un límite de intentos por proveedor aunque el nivel más caro funcione.
 
+Un `blocked_challenge` se resuelve primero buscando la obra en otro host. Si no
+hay espejo y la obra es abierta, ofrécele al usuario el captcha manual de
+`chatarrero`: resuelve el challenge en una ventana visible y la descarga sigue
+con esa sesión.
+
+## Sub-bibliotecas
+
+Un proyecto que trabaja temas distintos no los mezcla en una sola biblioteca:
+cada tema es una sub-biblioteca autónoma en `docs/literatura/<tema>/`, con su
+`catalogo.tsv`, su `manifest.tsv`, sus PDFs y su índice de `biblio-rata`.
+`--dest` apunta siempre a la sub-biblioteca, nunca a `docs/literatura/`.
+
+Se abre una nueva cuando el problema trae criterios de suficiencia propios y
+quien consulta un tema no buscaría en el otro: el método para construir un
+indicador compuesto y la literatura sobre codificación con agentes son dos
+sub-bibliotecas aunque las use el mismo proyecto. Una ronda más sobre un tema
+ya abierto va a la sub-biblioteca existente. Ante la duda, pregunta: separar
+después obliga a partir a mano el catálogo y el manifiesto. El nombre es un
+slug corto del tema (`construccion-indicadores`), no del proyecto ni de la
+fecha.
+
+**Copiar obras entre bibliotecas.** Una obra que sirve a dos temas se copia, no
+se enlaza: cada sub-biblioteca tiene que poder viajar sola.
+
+1. Filtra del `catalogo.tsv` de origen las filas que se copian y pásalas a
+   `pulpo buscar --source <biblioteca-de-origen>`. `buscar` conserva la columna
+   `identity` que traen, así que una obra sin DOI sigue casando con su fila del
+   manifiesto; `--source` queda sólo en `provenance`. Las filas entran como
+   `pendiente`: márcalas `relevante` con su motivo.
+2. Copia el PDF y comprueba que su `sha256` coincida con el del manifiesto de
+   origen.
+3. Agrega su fila al `manifest.tsv` de destino como `accepted`, con ese
+   `sha256`, el `path` relativo a la nueva biblioteca y `reason` "copiado desde
+   <biblioteca-de-origen>".
+4. Comprueba que cada fila `relevante` del catálogo tenga su `accepted` en el
+   manifiesto: es lo que delata una copia que no casó.
+
+**Consultar.** `biblio-rata` con `--corpus docs/literatura/<tema>` responde
+sobre un tema; con `--corpus docs/literatura` indexa todas las sub-bibliotecas
+juntas, porque recorre subdirectorios. En ese índice combinado, una obra
+copiada en dos temas aparece dos veces.
+
 ## Flujo
 
-1. Examina el proyecto y la biblioteca existente antes de elegir rutas, nombres
-   o herramientas. Si el usuario propone `docs/literatura/<directorio>`, úsala como biblioteca del proyecto y no inventes otra estructura.
+1. Examina el proyecto y sus bibliotecas antes de elegir rutas, nombres o
+   herramientas. La ronda entra en una sub-biblioteca existente o abre otra
+   según "Sub-bibliotecas"; si el usuario propone una ruta, úsala y no inventes
+   otra estructura.
 2. Convierte el problema en consultas y criterios de suficiencia: qué regiones,
    nombres alternativos, periodos, idiomas y tipos de obra cuentan. Anota esos
    criterios para poder detectar documentación faltante.
@@ -83,7 +129,12 @@ un límite de intentos por proveedor aunque el nivel más caro funcione.
    conserva la URL que funcionó y produce una línea por obra.
 7. No incorpores automáticamente un archivo que no sea PDF, esté vacío o no
    pueda abrirse con el extractor que usa `biblio-rata`. Déjalo con un estado de
-   fallo o revisión en el manifiesto y registra la causa.
+   fallo o revisión en el manifiesto y registra la causa. Si la URL no salió de
+   los metadatos —la armaste a mano o la dedujiste del patrón de nombres del
+   sitio—, compara además el número de páginas (`pdfinfo`) con lo esperado antes
+   de darla por buena: un PDF válido de otra obra, o sólo su prefacio, pasa la
+   comprobación del extractor. Si no es la obra, su fila pasa a `rejected` (ver
+   `references/contrato.md`).
 8. Separa duplicado exacto de versión distinta. El mismo hash puede evitar una
    segunda copia; título parecido, DOI o URL por sí solos no autorizan borrar
    una edición, traducción o preprint.
@@ -249,6 +300,11 @@ escribe en `<fuente>/vivencias/`, nunca en la copia. Sin marcador, este
 directorio es la fuente. Si el marcador apunta a una ruta que ya no existe,
 lee `vivencias/` de la copia sin escribir nada y avísale al usuario que
 reinstale la skill desde donde esté ahora su fuente.
+
+Al comenzar, lee `vivencias/INDICE.md`, que tiene una línea por cada
+hallazgo registrado, y abre la entrada de `vivencias/registro/` que nombra una
+línea sólo si toca la tarea en curso. Escribir el registro sin leerlo no sirve:
+una trampa ya documentada se repite igual.
 
 Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus preferencias:
 
