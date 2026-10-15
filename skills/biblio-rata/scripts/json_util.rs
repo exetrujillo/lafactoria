@@ -44,15 +44,19 @@ fn json_string<'a>(s: &'a str, key: &str) -> Option<&'a str> {
     Some(&inner[..end])
 }
 
-// Busca una clave JSON y comprueba que su valor empiece por un número.
+// Busca una clave JSON y devuelve el número con que empieza su valor.
 fn json_number<'a>(s: &'a str, key: &str) -> Option<&'a str> {
     let needle = format!("\"{key}\"");
     let key_pos = s.find(&needle)?;
     let after_key = &s[key_pos + needle.len()..];
     let colon = after_key.find(':')?;
     let rest = after_key[colon + 1..].trim_start();
-    if rest.starts_with('-') || rest.chars().next()?.is_ascii_digit() {
-        Some(rest)
+    let fin = rest
+        .find(|c: char| !(c.is_ascii_digit() || "+-.eE".contains(c)))
+        .unwrap_or(rest.len());
+    let numero = &rest[..fin];
+    if numero.strip_prefix('-').unwrap_or(numero).starts_with(|c: char| c.is_ascii_digit()) {
+        Some(numero)
     } else {
         None
     }
@@ -102,7 +106,9 @@ fn json_bracketed<'a>(s: &'a str, key: &str, open: char, close: char) -> Option<
 // Extrae cada objeto de nivel superior dentro de un arreglo ya delimitado
 // por [ ... ] (lo que devuelve json_array).
 fn object_entries(array: &str) -> Vec<&str> {
-    let inner = &array[1..array.len() - 1];
+    let Some(inner) = array.strip_prefix('[').and_then(|a| a.strip_suffix(']')) else {
+        return Vec::new();
+    };
     let bytes = inner.as_bytes();
     let mut entries = Vec::new();
     let mut depth = 0i32;

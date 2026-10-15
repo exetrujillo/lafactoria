@@ -2,6 +2,17 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.7.0] - 2026-10-15
+
+### Agregado
+
+- **`install` y `refrescar` aceptan `--descartar-vivencias`.** Consolidar el índice de vivencias en la fuente borra entradas, pero cada copia instalada las conservaba y la guarda de `install` las tomaba por vivencias escritas en la copia. `refrescar` se detenía y solo ofrecía `--adoptar-vivencias`, que las devolvía a la fuente y deshacía la consolidación, así que había que borrarlas a mano en cada copia. El flag nuevo borra de la copia lo que no está en la fuente e informa cada archivo con `descartado:`. Es excluyente con `--adoptar-vivencias`, y el mensaje de la guarda lo ofrece en lugar del borrado a mano. `refrescar` lo acepta solo con el nombre de una skill: la guarda muestra lo que sobra en una copia y se detiene ahí, así que con `--todas` borraría en copias que nadie llegó a revisar.
+
+### Corregido
+
+- `refrescar` reconoce la copia global cuando `$HOME` es un enlace simbólico. El registro guarda la ruta canónica de cada copia y `refrescar` la comparaba con `$HOME/.claude/skills` sin resolver, así que reinstalaba la copia global como `--destino` del home y, si el home era un repositorio git, escribía en su `.git/info/exclude`. Ahora compara las dos rutas resueltas, también para la copia del proyecto.
+- `json_number` de `json_util.rs` ya no acepta un `-` sin dígitos, y corta el valor donde termina el número en vez de devolver el resto del texto. Sigue sin validar la gramática de un número JSON. `object_entries` devuelve una lista vacía si no recibe un arreglo entre corchetes, en vez de entrar en pánico con menos de dos bytes. Ningún `ajustes.json` válido cambia de resultado. El cambio está en `src/json_util.rs` y en sus copias de cada skill, con un test para cada caso.
+
 ## [2.6.1] - 2026-10-15
 
 ### Corregido

@@ -26,6 +26,7 @@ cargo run --quiet -- lint [DIR]              # validar skills en DIR (default: .
 cargo run --quiet -- install NOMBRE          # instalar en .claude/skills (este proyecto)
 cargo run --quiet -- install NOMBRE --global # instalar en ~/.claude/skills (todos los proyectos)
 cargo run --quiet -- install NOMBRE --adoptar-vivencias  # adoptar lo que solo esté en la copia instalada
+cargo run --quiet -- install NOMBRE --descartar-vivencias  # borrarlo de la copia (tras consolidar en la fuente)
 cargo run --quiet -- install NOMBRE --destino DIR  # instalar en DIR/.claude/skills (otro proyecto)
 cargo run --quiet -- instalaciones [NOMBRE]  # copias registradas y si están al día con su fuente
 cargo run --quiet -- refrescar NOMBRE|--todas  # reinstalar las copias registradas desactualizadas

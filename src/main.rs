@@ -546,6 +546,26 @@ enum Destino {
     Destino(PathBuf),
 }
 
+/// Qué hace `install` con los archivos que solo están en la copia instalada.
+#[derive(Clone, Copy)]
+enum SoloEnCopia {
+    Frenar,
+    Adoptar,
+    Descartar,
+}
+
+fn elegir_solo_en_copia(adoptar: bool, descartar: bool, uso: &str) -> SoloEnCopia {
+    match (adoptar, descartar) {
+        (true, true) => {
+            eprintln!("error: --adoptar-vivencias y --descartar-vivencias son excluyentes\n{uso}");
+            exit(2);
+        }
+        (true, false) => SoloEnCopia::Adoptar,
+        (false, true) => SoloEnCopia::Descartar,
+        (false, false) => SoloEnCopia::Frenar,
+    }
+}
+
 // Registro local de cada copia instalada, una línea `nombre<TAB>ruta` por
 // copia. Existe para responder la pregunta inversa a `.factoria-origen`: la
 // copia sabe cuál es su fuente, pero hasta ahora la fuente no sabía dónde
@@ -647,7 +667,7 @@ fn mismo_directorio(a: &Path, b: &Path) -> bool {
     }
 }
 
-fn run_install(name: &str, destino: Destino, adoptar: bool) {
+fn run_install(name: &str, destino: Destino, solo_en_copia: SoloEnCopia) {
     let candidatos = localizar_skill(name);
     // `lint` ya trata el mismo name en las dos raíces como duplicado, pero
     // `install` valida una sola skill y no pasaría por esa regla: sin este
@@ -726,8 +746,8 @@ fn run_install(name: &str, destino: Destino, adoptar: bool) {
             }
         };
         if !en_riesgo.is_empty() {
-            if adoptar {
-                for relativo in &en_riesgo {
+            match solo_en_copia {
+                SoloEnCopia::Adoptar => for relativo in &en_riesgo {
                     let origen = dest.join(relativo);
                     let destino = source.join(relativo);
                     if let Some(padre) = destino.parent() {
@@ -742,20 +762,26 @@ fn run_install(name: &str, destino: Destino, adoptar: bool) {
                     }
                     println!("adoptado: {fuente}/{}", relativo.display());
                 }
-            } else {
-                eprintln!("error: la copia instalada de '{name}' tiene {} archivo(s) que no están en {fuente}:", en_riesgo.len());
-                for relativo in &en_riesgo {
-                    eprintln!("  {}", relativo.display());
+                SoloEnCopia::Descartar => for relativo in &en_riesgo {
+                    println!("descartado: {}", dest.join(relativo).display());
                 }
-                eprintln!();
-                eprintln!("Instalar los borraría. Suelen ser vivencias que la skill escribió");
-                eprintln!("mientras trabajaba, y este repositorio no elimina ese material sin");
-                eprintln!("permiso. Elige una opción:");
-                eprintln!("  - copiarlos a mano a {fuente}/ si quieres conservarlos;");
-                eprintln!("  - volver a instalar con --adoptar-vivencias para que install los");
-                eprintln!("    copie a la fuente antes de reemplazar la copia instalada;");
-                eprintln!("  - borrarlos de {} si son basura de una versión vieja.", dest.display());
-                exit(1);
+                SoloEnCopia::Frenar => {
+                    eprintln!("error: la copia instalada de '{name}' tiene {} archivo(s) que no están en {fuente}:", en_riesgo.len());
+                    for relativo in &en_riesgo {
+                        eprintln!("  {}", relativo.display());
+                    }
+                    eprintln!();
+                    eprintln!("Instalar los borraría. Suelen ser vivencias que la skill escribió");
+                    eprintln!("mientras trabajaba, y este repositorio no elimina ese material sin");
+                    eprintln!("permiso. Elige una opción:");
+                    eprintln!("  - copiarlos a mano a {fuente}/ si quieres conservarlos;");
+                    eprintln!("  - repetir el comando con --adoptar-vivencias para que install los");
+                    eprintln!("    copie a la fuente antes de reemplazar la copia instalada;");
+                    eprintln!("  - repetir el comando con --descartar-vivencias si sobran: basura de");
+                    eprintln!("    una versión vieja, o vivencias que se consolidaron o borraron en");
+                    eprintln!("    la fuente.");
+                    exit(1);
+                }
             }
         }
         if let Err(e) = fs::remove_dir_all(&dest) {
@@ -839,7 +865,7 @@ fn run_instalaciones(filtro: Option<&str>) {
 /// `skillcheck refrescar NOMBRE | --todas`: reinstala cada copia registrada
 /// que quedó desactualizada, en el mismo lugar donde estaba. Pasa por la
 /// misma validación que `install`, y se detiene en la primera que falle.
-fn run_refrescar(filtro: Option<&str>, adoptar: bool) {
+fn run_refrescar(filtro: Option<&str>, solo_en_copia: SoloEnCopia) {
     let filas = leer_registro(Path::new(REGISTRO_INSTALACIONES));
     let mut refrescadas = 0;
     for (name, copia) in filas.iter().filter(|(n, _)| filtro.map_or(true, |f| f == n)) {
@@ -857,9 +883,9 @@ fn run_refrescar(filtro: Option<&str>, adoptar: bool) {
         }
         let Some(dest_root) = copia.parent() else { continue };
         let home_skills = env::var_os("HOME").map(|h| PathBuf::from(h).join(".claude").join("skills"));
-        let destino = if home_skills.as_deref() == Some(dest_root) {
+        let destino = if home_skills.is_some_and(|h| mismo_directorio(&h, dest_root)) {
             Destino::Global
-        } else if fs::canonicalize(".claude/skills").ok().as_deref() == Some(dest_root) {
+        } else if mismo_directorio(Path::new(".claude/skills"), dest_root) {
             Destino::Proyecto
         } else {
             match dest_root.parent().and_then(Path::parent) {
@@ -867,7 +893,7 @@ fn run_refrescar(filtro: Option<&str>, adoptar: bool) {
                 None => continue,
             }
         };
-        run_install(name, destino, adoptar);
+        run_install(name, destino, solo_en_copia);
         refrescadas += 1;
     }
     println!("{refrescadas} copia(s) refrescada(s)");
@@ -884,6 +910,9 @@ fn print_help() {
     println!("  skillcheck install NOMBRE --adoptar-vivencias");
     println!("      copia a la fuente los archivos que solo existen en la copia instalada");
     println!("      (vivencias) antes de reemplazarla, en vez de abortar");
+    println!("  skillcheck install NOMBRE --descartar-vivencias");
+    println!("      borra esos archivos de la copia instalada, por ejemplo tras consolidar");
+    println!("      vivencias en la fuente; refrescar acepta las dos, y esta solo con NOMBRE");
 }
 
 fn main() {
@@ -893,18 +922,20 @@ fn main() {
     match it.next().map(|s| s.as_str()) {
         Some("--help") | Some("-h") => print_help(),
         Some("install") => {
+            let uso = "uso: skillcheck install NOMBRE [--global | --destino DIR] [--adoptar-vivencias | --descartar-vivencias]";
             let Some(name) = it.next() else {
-                eprintln!("uso: skillcheck install NOMBRE [--global]");
+                eprintln!("{uso}");
                 exit(2);
             };
-            let uso = "uso: skillcheck install NOMBRE [--global | --destino DIR] [--adoptar-vivencias]";
             let mut global = false;
             let mut adoptar = false;
+            let mut descartar = false;
             let mut proyecto: Option<PathBuf> = None;
             while let Some(flag) = it.next() {
                 match flag.as_str() {
                     "--global" => global = true,
                     "--adoptar-vivencias" => adoptar = true,
+                    "--descartar-vivencias" => descartar = true,
                     "--destino" => match it.next() {
                         Some(dir) => proyecto = Some(PathBuf::from(dir)),
                         None => {
@@ -927,18 +958,30 @@ fn main() {
                 (false, Some(p)) => Destino::Destino(fs::canonicalize(&p).unwrap_or(p)),
                 (false, None) => Destino::Proyecto,
             };
-            run_install(name, destino, adoptar);
+            run_install(name, destino, elegir_solo_en_copia(adoptar, descartar, uso));
         }
         Some("instalaciones") => run_instalaciones(it.next().map(|s| s.as_str())),
         Some("refrescar") => {
+            let uso = "uso: skillcheck refrescar NOMBRE|--todas [--adoptar-vivencias | --descartar-vivencias]";
             let resto: Vec<&str> = it.map(|s| s.as_str()).collect();
             let adoptar = resto.contains(&"--adoptar-vivencias");
-            let objetivo: Vec<&str> = resto.into_iter().filter(|a| *a != "--adoptar-vivencias").collect();
+            let descartar = resto.contains(&"--descartar-vivencias");
+            let objetivo: Vec<&str> = resto
+                .into_iter()
+                .filter(|a| *a != "--adoptar-vivencias" && *a != "--descartar-vivencias")
+                .collect();
+            let solo_en_copia = elegir_solo_en_copia(adoptar, descartar, uso);
             match objetivo.as_slice() {
-                ["--todas"] => run_refrescar(None, adoptar),
-                [nombre] if !nombre.starts_with('-') => run_refrescar(Some(nombre), adoptar),
+                // La guarda lista lo que sobra en una sola copia y refrescar se
+                // detiene ahí: con --todas se borraría en copias nunca listadas.
+                ["--todas"] if matches!(solo_en_copia, SoloEnCopia::Descartar) => {
+                    eprintln!("error: --descartar-vivencias va con el NOMBRE de una skill, no con --todas\n{uso}");
+                    exit(2);
+                }
+                ["--todas"] => run_refrescar(None, solo_en_copia),
+                [nombre] if !nombre.starts_with('-') => run_refrescar(Some(nombre), solo_en_copia),
                 _ => {
-                    eprintln!("uso: skillcheck refrescar NOMBRE|--todas [--adoptar-vivencias]");
+                    eprintln!("{uso}");
                     exit(2);
                 }
             }
@@ -1182,6 +1225,19 @@ mod tests {
             assert_eq!(json_array(s, "notas"), Some(r#"["dijo \"[\" y siguió", "C:\\", "fin"]"#));
             let arreglo = r#"[{"a": "\"}"}, {"b": "\\"}]"#;
             assert_eq!(object_entries(arreglo), vec![r#"{"a": "\"}"}"#, r#"{"b": "\\"}"#]);
+        }
+
+        #[test]
+        fn un_guion_suelto_no_es_un_numero() {
+            assert_eq!(json_number(r#"{"tope": -, "x": 1}"#, "tope"), None);
+            assert_eq!(json_number(r#"{"tope": -3, "x": 1}"#, "tope"), Some("-3"));
+            assert_eq!(json_number(r#"{"tope": 300}"#, "tope"), Some("300"));
+        }
+
+        #[test]
+        fn object_entries_sin_corchetes_no_entra_en_panico() {
+            assert!(object_entries("").is_empty());
+            assert!(object_entries("[").is_empty());
         }
     }
 }
