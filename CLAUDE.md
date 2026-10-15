@@ -171,3 +171,15 @@ skill.)
   en `CHANGELOG.md`, no en el mensaje. Nunca con coautoría ni trailers que
   atribuyan el commit a un agente o arnés (`Co-Authored-By:`, "Generated
   with..."): el autor es siempre el usuario, sin excepción.
+- Asunto con el formato `tipo: descripción (vX.Y.Z)`, por ejemplo `fix: pulpo
+  escribe path relativo a la biblioteca en manifest.tsv (v2.0.1)`. Un cambio
+  que no sube versión, como un `chore`, va sin el paréntesis. La versión es la
+  del ecosistema (ver "Versionar" en el README), vive solo en `CHANGELOG.md` y
+  se sube en el mismo commit. La de `Cargo.toml` no se toca. Nunca hacer push:
+  el usuario revisa los commits antes.
+- Nada versionado nombra la máquina local, al desarrollador, sus proyectos ni
+  la infraestructura que usa (nodos, rutas, usuarios, hostnames). Vale para
+  código, comentarios, configs, README y `CHANGELOG.md`. La única excepción es
+  la identidad de autor de los commits. Lo privado va en `docs/priv-docs/`, que
+  git ignora. Antes de cada commit, revisar `git diff --cached` buscando esas
+  referencias.
