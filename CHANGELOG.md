@@ -2,6 +2,14 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.5.0] - 2026-10-15
+
+### Cambiado
+
+- **`la-quinta-pata` pasa a un flujo de cuatro pasos: ejecutar, cazar, filtrar e informar.** Sus informes salían burocráticos y con hallazgos de relleno, y las dos cosas venían del propio SKILL.md. Cada hallazgo llevaba diez campos tomados de Toulmin, FMEA y NIST, entre ellos responsable, punto de control y criterio de parada, que trabajando con un agente siempre apuntan a la misma persona. La coordinación obligaba, antes de cerrar, a correr cada técnica reservada o a demostrar que no aplicaba, y en la práctica eso era recorrer las cinco. Ahora las técnicas son enfoques que se usan cuando el material da señal. Cada candidato pasa por mecanismo, defensa contraria y verificación antes de entrar al informe, que tiene un formato fijo: objetivo, banco, hasta `riesgos_dominantes_max` hallazgos y veredicto. "Nada sustantivo" es un resultado válido. El SKILL.md baja de 2.321 a 1.432 palabras.
+- Se conservan el banco de pruebas, los estados `confirmado`, `plausible` y `no determinable`, y la probabilidad y el impacto que lee `forjador`. Se elimina `references/hallazgo.md`. `riesgos_dominantes_max` pasa a ser el tope de hallazgos del informe, sin cambio de esquema.
+- Se probó con dos auditorías. Sobre el `ledger.py` anterior a 2.4.0, el camino feliz del banco encontró el bug del orden de las fuentes como primer hallazgo, aunque el auditor había visto el diff antes de correr. Sobre el validador de vivencias de la propia skill, elegido como control sano, salieron dos hallazgos reales y confirmados, sin relleno. Uno de ellos es que el lector compartido rechaza una nota con un `[` dentro.
+
 ## [2.4.0] - 2026-10-12
 
 ### Agregado

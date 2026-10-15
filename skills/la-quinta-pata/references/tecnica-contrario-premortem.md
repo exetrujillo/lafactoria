@@ -19,8 +19,8 @@ historia de fracaso no prueba que el riesgo sea probable.
    dependencias, incentivos y ataques, sin convertir cada posibilidad en riesgo.
 3. Para cada causa escribe condición -> mecanismo -> daño y conserva solo las que
    tengan evidencia o una prueba discriminante.
-4. Convierte las causas dominantes en una prueba o mitigación con dueño, punto de
-   control y criterio de parada observable.
+4. Convierte las causas dominantes en una prueba o mitigación concreta, con una
+   señal observable que diga si funcionó.
 
 Detén la cadena en el primer salto no respaldado. Si el único resultado es una
 narrativa imaginable, informa que no produjo un hallazgo sustantivo.
