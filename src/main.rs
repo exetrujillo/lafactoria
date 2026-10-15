@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{exit, Command};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_DESCRIPTION_LEN: usize = 1024;
 const MAX_NAME_LEN: usize = 64;
@@ -165,6 +166,15 @@ fn check_origen_vivencias(body: &str, skill: &str, report: &mut Report) {
     }
 }
 
+fn check_tmp_fijo(body: &str, skill: &str, report: &mut Report) {
+    if body.contains("/tmp/") {
+        report.error(
+            skill,
+            "el cuerpo nombra una ruta fija en '/tmp/'; en un /tmp compartido otra persona puede crearla antes y hacer fallar la escritura o correr su archivo. Usa un directorio de `mktemp -d` y bórralo al terminar",
+        );
+    }
+}
+
 fn check_copias_canonicas(skill_dir: &Path, skill: &str, report: &mut Report) {
     for (nombre, canonico) in COPIAS_CANONICAS {
         let path = skill_dir.join("scripts").join(nombre);
@@ -235,6 +245,7 @@ fn lint_skill(skill_dir: &Path, seen_names: &mut Vec<(String, String)>, report: 
         report.error(&dir_name, "SKILL.md no tiene instrucciones después del frontmatter");
     } else {
         check_referenced_paths(skill_dir, body, &dir_name, report);
+        check_tmp_fijo(body, &dir_name, report);
         // Una skill enlazada nunca tiene copia instalada, y su SKILL.md lo
         // versiona otro proyecto: exigirle el marcador no protege nada.
         if !es_enlace(skill_dir) {
@@ -429,6 +440,24 @@ fn directories_equal(src: &Path, dst: &Path) -> std::io::Result<bool> {
     Ok(true)
 }
 
+// mkdir falla si la ruta ya existe, así que en un /tmp compartido nadie puede
+// dejarla preparada antes con un archivo propio adentro.
+fn directorio_temporal(prefijo: &str) -> std::io::Result<PathBuf> {
+    use std::os::unix::fs::DirBuilderExt;
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    for intento in 0..100 {
+        let ruta = env::temp_dir().join(format!("{prefijo}-{}-{nanos}-{intento}", std::process::id()));
+        match fs::DirBuilder::new().mode(0o700).create(&ruta) {
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            resultado => return resultado.map(|()| ruta),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        format!("no quedó un nombre libre para '{prefijo}' en {}", env::temp_dir().display()),
+    ))
+}
+
 // Convención de las skills con vivencias propias (ver "Vivencias" en el
 // README): un validador fijo en `scripts/validar_ajustes.rs`, en Rust y sin
 // dependencias externas, que se compila al vuelo con `rustc` y se corre
@@ -442,23 +471,30 @@ fn validate_vivencias(source: &Path, name: &str) -> Result<(), String> {
         return Ok(());
     }
 
-    let binario = env::temp_dir().join(format!("skillcheck-validar-{name}"));
+    let dir = directorio_temporal("skillcheck-validar")
+        .map_err(|e| format!("no se pudo crear un directorio temporal: {e}"))?;
+    let resultado = compilar_y_correr(&validador, &dir.join(name), &ajustes);
+    let _ = fs::remove_dir_all(&dir);
+    resultado
+}
+
+fn compilar_y_correr(fuente: &Path, binario: &Path, entrada: &Path) -> Result<(), String> {
     let compilacion = Command::new("rustc")
         .args(["-O", "-o"])
-        .arg(&binario)
-        .arg(&validador)
+        .arg(binario)
+        .arg(fuente)
         .output()
         .map_err(|e| format!("no se pudo ejecutar rustc: {e}"))?;
     if !compilacion.status.success() {
         return Err(format!(
             "no compiló {}:\n{}",
-            validador.display(),
+            fuente.display(),
             String::from_utf8_lossy(&compilacion.stderr)
         ));
     }
 
-    let corrida = Command::new(&binario)
-        .arg(&ajustes)
+    let corrida = Command::new(binario)
+        .arg(entrada)
         .output()
         .map_err(|e| format!("no se pudo ejecutar '{}': {e}", binario.display()))?;
     if !corrida.status.success() {
@@ -923,10 +959,7 @@ mod tests {
     /// Crea un árbol temporal y devuelve su raíz. Sin dependencias externas:
     /// el repositorio no las tiene y este test no justifica introducir una.
     fn arbol_temporal(sufijo: &str) -> PathBuf {
-        let raiz = env::temp_dir().join(format!("skillcheck-test-{sufijo}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&raiz);
-        fs::create_dir_all(&raiz).unwrap();
-        raiz
+        directorio_temporal(&format!("skillcheck-test-{sufijo}")).unwrap()
     }
 
     fn escribir(raiz: &Path, relativo: &str, contenido: &str) {
@@ -1065,6 +1098,26 @@ mod tests {
         assert!(excluir_de_git(&sin_git, "demo", false).unwrap().is_empty(), "sin .git no toca nada");
         fs::remove_dir_all(&raiz).unwrap();
         fs::remove_dir_all(&sin_git).unwrap();
+    }
+
+    #[test]
+    fn rechaza_rutas_fijas_de_tmp() {
+        let mut report = Report::new();
+        check_tmp_fijo("rustc x.rs -O -o /tmp/x && /tmp/x\n", "fija", &mut report);
+        check_tmp_fijo("(d=$(mktemp -d) && rustc x.rs -o \"$d/x\" && \"$d/x\")\n", "propia", &mut report);
+        assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+        assert!(report.errors[0].starts_with("[fija]"), "{:?}", report.errors);
+    }
+
+    #[test]
+    fn el_directorio_temporal_es_privado_y_unico() {
+        use std::os::unix::fs::PermissionsExt;
+        let a = directorio_temporal("skillcheck-test-privado").unwrap();
+        let b = directorio_temporal("skillcheck-test-privado").unwrap();
+        assert_ne!(a, b);
+        assert_eq!(fs::metadata(&a).unwrap().permissions().mode() & 0o777, 0o700);
+        fs::remove_dir_all(&a).unwrap();
+        fs::remove_dir_all(&b).unwrap();
     }
 
     #[test]

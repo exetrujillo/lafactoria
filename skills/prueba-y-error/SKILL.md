@@ -370,5 +370,5 @@ Escribe en `vivencias/` según "Qué queda en vivencias y qué no".
 Para validar la forma del archivo, ejecuta:
 
 ```sh
-rustc scripts/validar_ajustes.rs -O -o /tmp/prueba-y-error-validar && /tmp/prueba-y-error-validar <fuente>/vivencias/ajustes.json
+(d=$(mktemp -d) && trap 'rm -rf "$d"' EXIT && rustc scripts/validar_ajustes.rs -O -o "$d/validar" && "$d/validar" <fuente>/vivencias/ajustes.json)
 ```

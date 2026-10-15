@@ -152,10 +152,18 @@ copiada en dos temas aparece dos veces.
 
 ## Herramienta Rust
 
-Compila sin añadir dependencias al repositorio:
+Compila sin añadir dependencias al repositorio. Los binarios y los TSV
+intermedios de la corrida van a un directorio propio, nunca a rutas fijas de
+`/tmp`, que es compartido. Si otra persona crea antes una de esas rutas, la
+compilación falla y el comando siguiente corre su archivo. Crea el directorio
+al empezar con `mktemp -d` y anota la ruta que imprime, que en los comandos de
+esta sección aparece como `<tmp>`. Escribe esa ruta literal en cada comando y
+no una variable, porque una variable de shell puede no sobrevivir de un comando
+al siguiente. El directorio se borra en "Cierre".
 
 ```sh
-rustc scripts/pulpo.rs -O -o /tmp/pulpo-librero
+mktemp -d
+rustc scripts/pulpo.rs -O -o <tmp>/pulpo-librero
 ```
 
 Los scrapers entregan a `buscar` un TSV con encabezado. El comando exige
@@ -163,14 +171,14 @@ Los scrapers entregan a `buscar` un TSV con encabezado. El comando exige
 `catalogo.tsv` en el directorio de la biblioteca:
 
 ```sh
-/tmp/pulpo-librero buscar --input /tmp/openalex.tsv \
+<tmp>/pulpo-librero buscar --input <tmp>/openalex.tsv \
   --dest /ruta/biblioteca --source openalex
 ```
 
 El descargador exige hosts autorizados y aplica límites por defecto ajustables:
 
 ```sh
-/tmp/pulpo-librero descargar --catalogo /ruta/biblioteca/catalogo.tsv \
+<tmp>/pulpo-librero descargar --catalogo /ruta/biblioteca/catalogo.tsv \
   --dest /ruta/biblioteca \
   --allow-host arxiv.org --max-files 100 --max-bytes 104857600 \
   --max-total-bytes 1073741824 \
@@ -202,8 +210,8 @@ El primer scraper acoplado es OpenAlex. Compílalo para producir un catálogo de
 descubrimiento, sin descargar obras:
 
 ```sh
-rustc scripts/openalex.rs -O -o /tmp/pulpo-openalex
-/tmp/pulpo-openalex search --query "palabra OR palabra2" --out /tmp/candidatos.tsv --per-page 25
+rustc scripts/openalex.rs -O -o <tmp>/pulpo-openalex
+<tmp>/pulpo-openalex search --query "palabra OR palabra2" --out <tmp>/candidatos.tsv --per-page 25
 ```
 
 El TSV de OpenAlex incluye `is_oa`, `oa_status`, `license`, `version`,
@@ -226,10 +234,10 @@ otro scraper, de una lista cerrada del usuario o de una corrida anterior— y
 pregunta por sus copias abiertas:
 
 ```sh
-/tmp/pulpo-openalex resolver --catalogo /ruta/biblioteca/catalogo.tsv \
-  --out /tmp/resueltos.tsv --solo-relevante --max 200
+<tmp>/pulpo-openalex resolver --catalogo /ruta/biblioteca/catalogo.tsv \
+  --out <tmp>/resueltos.tsv --solo-relevante --max 200
 
-/tmp/pulpo-librero buscar --input /tmp/resueltos.tsv \
+<tmp>/pulpo-librero buscar --input <tmp>/resueltos.tsv \
   --dest /ruta/biblioteca --source openalex-doi
 ```
 
@@ -245,11 +253,11 @@ Para buscar en arXiv, compila el adaptador oficial Atom y conserva su salida
 como catálogo de candidatos:
 
 ```sh
-rustc scripts/arxiv.rs -O -o /tmp/pulpo-arxiv
-/tmp/pulpo-arxiv search --query "au:Apellido AND ti:tema" --out /tmp/arxiv.tsv --max-results 25
+rustc scripts/arxiv.rs -O -o <tmp>/pulpo-arxiv
+<tmp>/pulpo-arxiv search --query "au:Apellido AND ti:tema" --out <tmp>/arxiv.tsv --max-results 25
 
 # versión concreta, sin que la búsqueda pueda sustituirla por la actual
-/tmp/pulpo-arxiv search --id 1706.03762v1 --out /tmp/arxiv-v1.tsv
+<tmp>/pulpo-arxiv search --id 1706.03762v1 --out <tmp>/arxiv-v1.tsv
 ```
 
 Para corridas recurrentes, informa un contacto con `--mailto` y respeta la
@@ -266,11 +274,11 @@ metadata de cada ítem, que es lo único que distingue una descarga abierta de u
 préstamo controlado:
 
 ```sh
-rustc scripts/internetarchive.rs -O -o /tmp/pulpo-ia
-/tmp/pulpo-ia search --query "subject:\"linguistics\"" --out /tmp/ia.tsv --rows 25
+rustc scripts/internetarchive.rs -O -o <tmp>/pulpo-ia
+<tmp>/pulpo-ia search --query "subject:\"linguistics\"" --out <tmp>/ia.tsv --rows 25
 
 # ítems concretos, sin pasar por la búsqueda
-/tmp/pulpo-ia search --id nasa_techdoc_20040171231 --out /tmp/ia.tsv
+<tmp>/pulpo-ia search --id nasa_techdoc_20040171231 --out <tmp>/ia.tsv
 ```
 
 La consulta se restringe a `mediatype:texts` salvo que traigas el tuyo, porque
@@ -333,8 +341,7 @@ El validador comprueba la forma del archivo, las claves declaradas y sus tipos;
 no valida contenido bibliográfico.
 
 ```sh
-rustc scripts/validar_ajustes.rs -O -o /tmp/pulpo-librero-validar
-/tmp/pulpo-librero-validar <fuente>/vivencias/ajustes.json
+(d=$(mktemp -d) && trap 'rm -rf "$d"' EXIT && rustc scripts/validar_ajustes.rs -O -o "$d/validar" && "$d/validar" <fuente>/vivencias/ajustes.json)
 ```
 
 ## Cierre
@@ -355,3 +362,6 @@ pocas palabras | archivo`).
 
 Una corrida que salió como estaba previsto no se registra, por grande que haya
 sido: qué se bajó ya lo guardan el catálogo y el manifiesto.
+
+Al terminar, borra el directorio de la corrida con `rm -rf <tmp>`. Lo que valía
+conservar ya está en el catálogo y el manifiesto de la biblioteca.

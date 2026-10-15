@@ -2,6 +2,17 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.6.0] - 2026-10-15
+
+### Agregado
+
+- `lint` rechaza un SKILL.md cuyo cuerpo nombre una ruta fija en `/tmp/`. Las siete skills afectadas por el problema de abajo lo habían heredado de la plantilla de `forjador`. La regla alcanza también a las skills enlazadas.
+
+### Corregido
+
+- **Ninguna skill compila ya a una ruta fija de `/tmp`.** Siete skills compilaban su validador de vivencias a rutas fijas de un `/tmp` compartido, y `pulpo-librero` también sus binarios. Si otra persona creaba antes el archivo, `rustc` no podía sobrescribirlo, y donde la ejecución iba en una línea aparte se corría ese archivo con el usuario propio. Se había confirmado con un archivo previo no escribible. Ahora el validador corre en una sola línea, dentro de un subshell que compila en un directorio de `mktemp -d`, lo borra al salir aunque algo falle y conserva el código de salida del validador. `pulpo-librero` crea un directorio por corrida para sus binarios y sus TSV intermedios, que antes también quedaban en rutas fijas legibles por todos, y lo borra en "Cierre". La plantilla de `forjador` enseña el mismo bloque.
+- El gate de `install` compilaba a `skillcheck-validar-<nombre>` en el directorio temporal del sistema y nunca lo borraba. Ahora usa un directorio 700 con nombre único, creado con `mkdir` para que nadie pueda dejarlo preparado, y lo borra en todos los caminos. Los tests de `skillcheck` crean sus árboles igual. Antes usaban rutas predecibles en 755 y seguían de largo si ya existían.
+
 ## [2.5.1] - 2026-10-15
 
 ### Corregido

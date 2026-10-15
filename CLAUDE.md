@@ -76,6 +76,11 @@ entera si la skill es personal, o solo sus `vivencias/` y su
   instrucción resolvería `vivencias/` contra ella en vez de contra la fuente.
   `lint_skill` no la corre sobre una skill enlazada (`es_enlace`), que nunca
   tiene copia y cuyo SKILL.md versiona otro proyecto.
+- `check_tmp_fijo` da error si el cuerpo contiene `/tmp/`. En un `/tmp`
+  compartido otra persona puede crear antes una ruta fija, y un comando que
+  compila ahí y en la línea siguiente ejecuta corre su archivo. Las skills
+  compilan en un directorio de `mktemp -d` que borran al terminar. Esta regla
+  sí corre sobre las skills enlazadas, porque el riesgo es el mismo.
 - `check_copias_canonicas` recorre la tabla `COPIAS_CANONICAS` y compara byte a
   byte cada `scripts/<nombre>` de la skill contra el archivo homónimo de `src/`
   embebido con `include_str!`. Hoy son dos: `json_util.rs`, que usan los
@@ -102,7 +107,10 @@ entera si la skill es personal, o solo sus `vivencias/` y su
   fuente tiene tanto `scripts/validar_ajustes.rs` como `vivencias/ajustes.json`,
   los compila con `rustc -O` a un binario temporal y lo ejecuta contra ese
   `ajustes.json`; si falla, `install` aborta con el mismo criterio que un
-  error de `lint`. Es una convención fija (nombre de archivo, lenguaje Rust),
+  error de `lint`. El binario va a un directorio de `directorio_temporal`,
+  creado con `mkdir` en modo 700 y nombre único para que nadie pueda dejarlo
+  preparado, y se borra en todos los caminos, también si algo falla. Los
+  tests crean sus árboles con la misma función. Es una convención fija (nombre de archivo, lenguaje Rust),
   no un mecanismo genérico para validadores en cualquier lenguaje. Si falta
   cualquiera de los dos archivos, no valida nada y sigue de largo — cubre
   tanto la skill sin validador propio como un clon fresco sin `vivencias/`

@@ -160,10 +160,17 @@ escribe en la copia y la entrada nunca llega a la fuente. `lint` lo exige.
 
 Si el cuerpo declara claves propias de `ajustes.json`, escribe también su
 validador de vivencias en `scripts/`, en Rust y sin dependencias externas
-(mismo patrón que `skills/pulpo-librero/scripts/`: `rustc archivo.rs -O -o
-/tmp/binario`, JSON extraído a mano, sin `serde`). Comprueba que el
-`ajustes.json` real tiene las llaves balanceadas, las claves declaradas y sus
-tipos coinciden. No valida contenido de negocio, solo la forma del archivo.
+(mismo patrón que `skills/pulpo-librero/scripts/`: JSON extraído a mano, sin
+`serde`). Comprueba que el `ajustes.json` real tiene las llaves balanceadas,
+las claves declaradas y sus tipos coinciden. No valida contenido de negocio,
+solo la forma del archivo.
+
+El bloque que corre ese validador en "Vivencias propias" se copia tal cual del
+de cualquier skill que ya lo tenga. Compila dentro de un directorio de
+`mktemp -d`, que nadie más puede escribir, y lo borra al salir aunque algo
+falle. Nunca compiles a una ruta fija de `/tmp`: es compartido, otra persona
+puede crear antes esa ruta y el comando siguiente correría su archivo. `lint`
+lo rechaza.
 
 No reescribas a mano el lector de JSON: copia `src/json_util.rs` tal cual al
 `scripts/` de la skill nueva y agrégale un `include!("json_util.rs");` al
@@ -341,8 +348,7 @@ balanceadas, las claves declaradas y sus tipos esperados; no valida
 contenido de negocio.
 
 ```sh
-rustc scripts/validar_ajustes.rs -O -o /tmp/forjador-validar
-/tmp/forjador-validar <fuente>/vivencias/ajustes.json
+(d=$(mktemp -d) && trap 'rm -rf "$d"' EXIT && rustc scripts/validar_ajustes.rs -O -o "$d/validar" && "$d/validar" <fuente>/vivencias/ajustes.json)
 ```
 
 ## Reglas que aplica skillcheck
@@ -376,3 +382,6 @@ rustc scripts/validar_ajustes.rs -O -o /tmp/forjador-validar
   directorio: sin esa instrucción, la skill instalada escribe sus vivencias en
   la copia y no en la fuente. Las skills enlazadas quedan exentas porque nunca
   tienen copia.
+- El cuerpo no puede nombrar una ruta fija dentro de `/tmp`. Binarios y
+  archivos intermedios van a un directorio de `mktemp -d` que se borra al
+  terminar. Esta regla sí alcanza a las skills enlazadas.

@@ -149,6 +149,5 @@ El validador comprueba la forma del archivo, las claves declaradas y sus tipos;
 no valida contenido de negocio.
 
 ```sh
-rustc scripts/validar_ajustes.rs -O -o /tmp/biblio-rata-validar
-/tmp/biblio-rata-validar <fuente>/vivencias/ajustes.json
+(d=$(mktemp -d) && trap 'rm -rf "$d"' EXIT && rustc scripts/validar_ajustes.rs -O -o "$d/validar" && "$d/validar" <fuente>/vivencias/ajustes.json)
 ```
