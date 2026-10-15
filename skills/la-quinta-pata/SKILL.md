@@ -33,9 +33,14 @@ entierra lo que sí importa.
 ## 1. Ejecutar antes de razonar
 
 Si el objeto se puede correr (código, script, comando, consulta, configuración
-aplicable), córrelo antes de leerlo a fondo y antes de abrir cualquier
+aplicable), córrelo antes de razonar sobre él y antes de abrir cualquier
 subagente. Leer dice qué pretende hacer. Correr dice qué hace, y cuesta mucho
 menos.
+
+Léelo lo justo para saber qué toca. Si escribe, borra, descarga, cobra o llama
+a un servicio, córrelo en un entorno desechable (una copia, datos de prueba, un
+doble del servicio, un modo en seco). Si no hay forma de correrlo sin efectos
+reales, pregunta antes.
 
 - **Camino feliz.** Construye el caso legítimo más frecuente y compruébalo. Un
   control demasiado estricto, que rechaza lo correcto, no se ve leyendo: el

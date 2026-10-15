@@ -2,6 +2,12 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.5.1] - 2026-10-15
+
+### Corregido
+
+- `la-quinta-pata` ya no manda correr el objeto antes de leerlo. La reescritura de 2.5.0 decía "córrelo antes de leerlo a fondo", y el entorno desechable solo se exigía a los comandos de un documento de instrucciones, así que auditar un script que escribe, borra, descarga o cobra lo habría corrido sobre lo real. Lo encontró la propia skill al auditarse. Ahora se lee lo justo para saber qué toca, lo que tiene efectos fuera de sí mismo se corre en un entorno desechable, y si no hay manera, se pregunta.
+
 ## [2.5.0] - 2026-10-15
 
 ### Cambiado
