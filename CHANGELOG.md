@@ -2,6 +2,14 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.6.1] - 2026-10-15
+
+### Corregido
+
+- **El lector de `ajustes.json` ya no se confunde con un corchete o una llave dentro de un string.** `json_bracketed` y `object_entries` contaban `[`, `]`, `{` y `}` también dentro de los textos, así que una nota como `"rango [a, b)"` en un `ajustes.json` correcto lo hacía rechazar con "falta el arreglo 'notas'", y eso bloqueaba `install` y `refrescar`. Ahora saltan los strings y las comillas escapadas, como ya hacía `balanced`. El cambio está en `src/json_util.rs` y en sus copias de cada skill, y `skillcheck` suma tests para los tres casos. `CLAUDE.md` y la cabecera de `json_api.rs` daban ese límite como el motivo para no leer respuestas de API con `json_util.rs`. Ahora nombran los que siguen en pie: toma la primera aparición de la clave en cualquier nivel y no desescapa.
+- `prueba-y-error`: `ledger.py resultado` rechaza un segundo resultado para la misma iteración, candidato y linaje, y `check` lo marca si se agregó a mano. Antes se aceptaba, y después `verificar_presupuesto` bloqueaba el experimento sin otra salida que editar el ledger. `check` también da error si el crudo que cita un resultado ya no existe. Antes solo detectaba uno reescrito, y uno borrado pasaba en silencio.
+- El error de `version` de los validadores de vivencias culpaba a `ESQUEMA_ESPERADO`, aunque mientras valga "1" la causa siempre está en el `ajustes.json`. Ahora pide corregir `version` ahí y deja la constante como segunda posibilidad.
+
 ## [2.6.0] - 2026-10-15
 
 ### Agregado

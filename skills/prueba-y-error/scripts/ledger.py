@@ -136,6 +136,8 @@ def agregar_registro(ledger, contrato, registro, tipo):
         plan = buscar_registro(registros, "plan", clave)
         if plan is None:
             raise ValueError("resultado huérfano: no existe un plan previo bajo el linaje vigente")
+        if buscar_registro(registros, "resultado", clave) is not None:
+            raise ValueError("ya existe un resultado para esa iteración y candidato")
         validar_resultado(registro)
         if registro.get("test_aplicado") != plan.get("test_declarado"):
             raise ValueError(
@@ -191,11 +193,13 @@ def verificar_cruce(registro):
     if registro.get("sha256_crudo") not in analisis.get("sha256_por_crudo", {}).values():
         problemas.append("el sha256 del crudo no participó del análisis citado")
     crudo = registro.get("crudo")
-    if crudo and Path(crudo).exists():
+    if crudo:
         # reescribir el raw después del análisis dejaría un ledger coherente
-        # consigo mismo pero desconectado de lo que realmente se midió.
-        actual = hashlib.sha256(Path(crudo).read_bytes()).hexdigest()
-        if actual != registro.get("sha256_crudo"):
+        # consigo mismo pero desconectado de lo que realmente se midió. Borrarlo
+        # deja el resultado igual de sin auditar.
+        if not Path(crudo).exists():
+            problemas.append(f"el crudo '{crudo}' ya no existe, el resultado no se puede auditar")
+        elif hashlib.sha256(Path(crudo).read_bytes()).hexdigest() != registro.get("sha256_crudo"):
             problemas.append(f"el crudo '{crudo}' cambió después de registrarse")
     return problemas
 
@@ -229,6 +233,8 @@ def comprobar(ledger, contrato):
                 hashes_banco[digest] = banco
         elif registro.get("tipo") == "resultado" and clave not in planes:
             errores.append(f"línea {numero}: resultado huérfano bajo el linaje {digest}")
+        elif registro.get("tipo") == "resultado" and clave in resultados:
+            errores.append(f"línea {numero}: segundo resultado para la línea {resultados[clave]}")
         elif registro.get("tipo") == "resultado":
             resultados[clave] = numero
             try:

@@ -94,8 +94,10 @@ entera si la skill es personal, o solo sus `vivencias/` y su
   sincroniza automáticamente.
 - Los dos lectores no son intercambiables ni uno sustituye al otro:
   `json_util.rs` comprueba presencia y tipo de claves conocidas en un
-  `ajustes.json` plano y su conteo de llaves no distingue las que están dentro
-  de un string, así que se rompe con una respuesta de API real. `json_api.rs`
+  `ajustes.json` plano. Toma la primera aparición de la clave en cualquier
+  nivel del texto y no desescapa, así que `json_string` corta el valor en la
+  primera comilla aunque esté escapada. Con una respuesta de API real eso
+  devuelve claves de otro objeto y textos truncados. `json_api.rs`
   lee JSON anidado, desescapa de verdad y exige un ámbito por consulta, para
   que leer `is_oa` de `open_access` no pueda devolver el de `primary_location`.
 - `copy_dir_recursive` + `run_install` implementan `skillcheck install`: validan

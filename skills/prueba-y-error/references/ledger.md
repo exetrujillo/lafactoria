@@ -26,7 +26,8 @@ append-only. Por eso cada iteración deja **tres** registros enlazados por
 Un `resultado` sin su `plan` previo en el archivo es evidencia inválida, y el
 nodo 7 debe descartarlo. Un `diagnostico` sin su `resultado` se rechaza igual, y
 solo puede haber uno por resultado: dos lecturas de la misma corrida no dejarían
-manera de saber cuál vale.
+manera de saber cuál vale. Lo mismo vale para el `resultado`: uno solo por
+`(iteracion, candidato, hash_contrato)`, rechazado al escribir y marcado por `check`.
 
 ## Formato
 
@@ -55,7 +56,7 @@ Un objeto JSON por línea, sin saltos internos.
 | `test_declarado` | `plan` | el test y su umbral, fijados antes de ver nada |
 | `decision_si_falla` | `plan` | qué pasa si la predicción no se cumple, decidido de antemano |
 | `regla` | `plan` | qué regla de la política decidirá quién sobrevive, fijada antes de correr |
-| `crudo`, `sha256_crudo` | `resultado` | ruta a la salida sin interpretar y su hash: si el crudo cambia, `check` lo detecta |
+| `crudo`, `sha256_crudo` | `resultado` | ruta a la salida sin interpretar y su hash: si el crudo cambia o se borra, `check` lo detecta |
 | `run_id` | `resultado` | el recibo de `correr.py` que respalda el costo |
 | `metrica` | `resultado` | valor, **intervalo** y n. Un valor sin intervalo no sirve |
 | `analisis` | `resultado` | método, corrección, alfa, semilla y ruta del análisis que produjo la métrica |

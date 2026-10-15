@@ -148,7 +148,7 @@ el triage, la decisión.
   permutación pareada y corrección Holm o Bonferroni desde el crudo.
 - `scripts/ledger.py` deriva cada `resultado` del recibo y del análisis, y su
   `check` relee ambos en disco: si alguien edita una métrica ya escrita o
-  reescribe un crudo, la verificación falla. La interpretación —veredicto, triage,
+  reescribe o borra un crudo, la verificación falla. La interpretación —veredicto, triage,
   decisión— no entra ahí: va en un registro aparte, `ledger.py diagnostico`, que
   escribe el agente.
 - `scripts/verificar_presupuesto.py` suma recibos y los concilia con el ledger.
@@ -159,7 +159,7 @@ el triage, la decisión.
   una ronda nueva mientras queden resultados sin diagnosticar.
 
 `scripts/autoprueba.py` ejercita todo lo anterior contra sus propios modos de
-fallo —métrica inflada a mano, crudo reescrito, costo subdeclarado, `run_id`
+fallo —métrica inflada a mano, crudo reescrito o borrado, costo subdeclarado, `run_id`
 reutilizado, separación inventada— en segundos y sin gastar un token. Correrla
 después de tocar cualquier script es más barato y más fiable que pedir una
 auditoría a un modelo.

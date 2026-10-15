@@ -122,6 +122,32 @@ def prueba_manipulacion(exp):
     hecho = correr([AQUI / "ledger.py", "check", "EXP/ledger.jsonl", "EXP/contrato.md"], exp.parent)
     afirmar("detecta un crudo reescrito", "cambió después de registrarse" in hecho.stdout, hecho.stdout)
 
+    crudo.unlink()
+    hecho = correr([AQUI / "ledger.py", "check", "EXP/ledger.jsonl", "EXP/contrato.md"], exp.parent)
+    afirmar("detecta un crudo borrado", hecho.returncode != 0 and "ya no existe" in hecho.stdout, hecho.stdout)
+
+def prueba_resultado_unico(raiz):
+    print("\nun solo resultado por iteración, candidato y linaje")
+    exp = montar(raiz, 0.09)
+    correr([AQUI / "ronda.py", "EXP/ronda.json", "--exp", "EXP"], raiz)
+    orden = [AQUI / "ledger.py", "resultado", "EXP/ledger.jsonl", "--contrato", "EXP/contrato.md",
+             "--fase", "A", "--iteracion", "1", "--candidato", "alto",
+             "--recibo", "EXP/runs/it1-alto.json", "--analisis", "EXP/analisis/it1.json",
+             "--test-aplicado", "permutación pareada, holm, alpha 0.05"]
+    antes = (exp / "ledger.jsonl").read_text(encoding="utf-8")
+    hecho = correr(orden, raiz)
+    afirmar("rechaza un segundo resultado al escribir",
+            hecho.returncode == 2 and "ya existe un resultado" in hecho.stderr, hecho.stderr)
+    afirmar("el rechazo no toca el ledger", (exp / "ledger.jsonl").read_text(encoding="utf-8") == antes)
+
+    lineas = antes.splitlines()
+    resultado = next(l for l in lineas if json.loads(l).get("tipo") == "resultado"
+                     and json.loads(l)["candidato"] == "alto")
+    (exp / "ledger.jsonl").write_text(antes + resultado + "\n", encoding="utf-8")
+    hecho = correr([AQUI / "ledger.py", "check", "EXP/ledger.jsonl", "EXP/contrato.md"], raiz)
+    afirmar("check detecta un segundo resultado inyectado a mano",
+            hecho.returncode != 0 and "segundo resultado" in hecho.stdout, hecho.stdout)
+
 def prueba_costos(exp):
     print("\ncostos: el recibo manda")
     ledger = exp / "ledger.jsonl"
@@ -266,6 +292,7 @@ def main():
         raiz = Path(tmp)
         exp = prueba_flujo(raiz)
         prueba_manipulacion(exp)
+        prueba_resultado_unico(raiz / "unico")
         prueba_costos(exp)
         prueba_veredictos(raiz)
         prueba_strict(raiz)

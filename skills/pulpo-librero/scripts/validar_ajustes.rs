@@ -90,7 +90,7 @@ fn main() {
     if let Some(v) = json_string(&content, "version") {
         if v != ESQUEMA_ESPERADO {
             errores.push(format!(
-                "'version' es \"{v}\" pero el esquema esperado de 'pulpo-librero' es \"{ESQUEMA_ESPERADO}\": no hay ningún cambio de esquema documentado todavía para esta skill, así que si ves este error revisa skills/pulpo-librero/scripts/validar_ajustes.rs — ESQUEMA_ESPERADO subió sin dejar la nota de qué cambió y qué clave de ajustes.json revisar"
+                "'version' es \"{v}\" y la skill 'pulpo-librero' espera \"{ESQUEMA_ESPERADO}\". Corrige 'version' en vivencias/ajustes.json. Si en cambio subió ESQUEMA_ESPERADO en skills/pulpo-librero/scripts/validar_ajustes.rs, falta la nota de qué cambió"
             ));
         }
     }

@@ -1156,4 +1156,32 @@ mod tests {
         assert!(!is_opencode_name("dos--guiones"));
         assert!(!is_opencode_name("-invalido"));
     }
+
+    mod json_util {
+        #![allow(dead_code)]
+        include!("json_util.rs");
+
+        #[test]
+        fn un_corchete_dentro_de_un_string_no_corta_el_arreglo() {
+            let s = r#"{"notas": ["rango [a, b)", "otra"], "x": "y"}"#;
+            assert_eq!(json_array(s, "notas"), Some(r#"["rango [a, b)", "otra"]"#));
+            assert_eq!(json_array(r#"{"notas": ["a]", "b"]}"#, "notas"), Some(r#"["a]", "b"]"#));
+        }
+
+        #[test]
+        fn una_llave_dentro_de_un_string_no_corta_el_objeto() {
+            let s = r#"{"ajustes": {"plantilla": "usa {nombre"}, "notas": []}"#;
+            assert_eq!(json_object(s, "ajustes"), Some(r#"{"plantilla": "usa {nombre"}"#));
+            let arreglo = r#"["a{", {"b": "}"}, {"c": "{"}]"#;
+            assert_eq!(object_entries(arreglo), vec![r#"{"b": "}"}"#, r#"{"c": "{"}"#]);
+        }
+
+        #[test]
+        fn una_comilla_escapada_no_cierra_el_string() {
+            let s = r#"{"notas": ["dijo \"[\" y siguió", "C:\\", "fin"], "x": 1}"#;
+            assert_eq!(json_array(s, "notas"), Some(r#"["dijo \"[\" y siguió", "C:\\", "fin"]"#));
+            let arreglo = r#"[{"a": "\"}"}, {"b": "\\"}]"#;
+            assert_eq!(object_entries(arreglo), vec![r#"{"a": "\"}"}"#, r#"{"b": "\\"}"#]);
+        }
+    }
 }

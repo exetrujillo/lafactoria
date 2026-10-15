@@ -77,11 +77,19 @@ fn json_bracketed<'a>(s: &'a str, key: &str, open: char, close: char) -> Option<
     }
     let bytes = rest.as_bytes();
     let mut depth = 0i32;
+    let mut in_string = false;
+    let mut escaped = false;
     for (i, &b) in bytes.iter().enumerate() {
         let c = b as char;
-        if c == open {
+        if escaped {
+            escaped = false;
+        } else if c == '\\' && in_string {
+            escaped = true;
+        } else if c == '"' {
+            in_string = !in_string;
+        } else if c == open && !in_string {
             depth += 1;
-        } else if c == close {
+        } else if c == close && !in_string {
             depth -= 1;
             if depth == 0 {
                 return Some(&rest[..=i]);
@@ -99,14 +107,22 @@ fn object_entries(array: &str) -> Vec<&str> {
     let mut entries = Vec::new();
     let mut depth = 0i32;
     let mut start = None;
+    let mut in_string = false;
+    let mut escaped = false;
     for (i, byte) in bytes.iter().enumerate() {
         let c = *byte as char;
-        if c == '{' {
+        if escaped {
+            escaped = false;
+        } else if c == '\\' && in_string {
+            escaped = true;
+        } else if c == '"' {
+            in_string = !in_string;
+        } else if c == '{' && !in_string {
             if depth == 0 {
                 start = Some(i);
             }
             depth += 1;
-        } else if c == '}' {
+        } else if c == '}' && !in_string {
             depth -= 1;
             if depth == 0 {
                 if let Some(s) = start {

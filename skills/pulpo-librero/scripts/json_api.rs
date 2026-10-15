@@ -3,8 +3,8 @@
 //
 // Es el hermano de json_util.rs, no su reemplazo: aquel alcanza para comprobar
 // presencia y tipo de claves conocidas en un ajustes.json plano, y no sirve
-// acá porque su conteo de llaves no distingue una '{' real de una escrita
-// dentro de un string. Una respuesta de API trae abstracts con llaves,
+// acá porque toma la primera aparición de una clave en cualquier nivel y no
+// desescapa. Una respuesta de API trae objetos anidados con claves repetidas,
 // comillas escapadas y \uXXXX.
 //
 // Toda función recibe un ámbito donde buscar y sólo mirará las claves de ese
