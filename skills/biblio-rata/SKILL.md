@@ -37,8 +37,10 @@ También sirve pasar `--corpus DIR` en cada comando, o dejar que lo deduzca solo
 si no se le dice nada, busca hacia arriba desde el directorio actual la carpeta
 que ya tenga un índice.
 
-**2. Buscar.** El índice se construye solo la primera vez (unos segundos por
-cada cien páginas); no hace falta indexar a mano.
+**2. Buscar.** Cada búsqueda pone el índice al día antes de responder: indexa
+los PDF nuevos o cambiados y saca los borrados. La primera vez tarda unos
+segundos por cada cien páginas; después, con todo sin cambios, casi nada. No
+hace falta indexar a mano.
 
 ```sh
 python3 $SK/scripts/buscar.py "successive halving" --n 8
@@ -77,11 +79,15 @@ sale gratis porque el buscador ya devuelve la página.
 ## Mantenimiento
 
 ```sh
-python3 $SK/scripts/indexar.py            # incremental: solo lo nuevo o cambiado
+python3 $SK/scripts/indexar.py            # incremental, sin buscar: lo nuevo o cambiado, y borra lo que ya no está
 python3 $SK/scripts/indexar.py --rehacer  # reconstruye desde cero
 python3 $SK/scripts/indexar.py --listar   # documentos, páginas y títulos
 python3 $SK/scripts/entorno.py            # qué detectó de esta máquina
 ```
+
+`buscar.py` hace lo mismo que el incremental en cada llamada; `indexar.py`
+suelto sirve para indexar sin buscar, por ejemplo después de agregar PDFs al
+corpus.
 
 El índice vive en `<corpus>/.biblio-rata/indice.db`, junto a los PDFs. Conviene
 agregar `.biblio-rata/` al `.gitignore` del proyecto que lo use, preguntándole

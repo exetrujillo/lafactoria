@@ -2,6 +2,12 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.12.0] - 2026-10-18
+
+### Cambiado
+
+- **`biblio-rata`: `buscar.py` pone el índice al día antes de cada búsqueda y `indexar.py` saca del índice los PDF que ya no están.** `buscar.py` solo indexaba si no existía `indice.db`, así que con el índice ya creado un PDF nuevo no aparecía, uno modificado devolvía el texto anterior y uno borrado seguía saliendo, mientras el SKILL.md decía que no hacía falta indexar a mano. La detección por ruta, mtime y tamaño ya existía en `indexar.py`; ahora `buscar.py` la corre en proceso antes de buscar y antes de `--listar`, con lo que cambió por stderr (nada si no cambió nada, unas centésimas de segundo). `indexar.py` además borra de `doc` y `pagina` los slugs cuyo PDF desapareció y lo cuenta como `N borrados` en el resumen. Consecuencia: buscar exige un extractor disponible aunque el índice exista, como ya pedía el SKILL.md. Lo encontró la auditoría lateral del 2026-10-18.
+
 ## [2.11.0] - 2026-10-18
 
 ### Cambiado

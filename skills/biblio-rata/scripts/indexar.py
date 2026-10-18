@@ -3,9 +3,10 @@
 
   python3 indexar.py [CORPUS] [--rehacer] [--listar]
 
-Se salta los PDF cuya ruta, mtime y tamaño no cambiaron. Si el
-extractor disponible cambió desde la última corrida, reindexa todo,
-porque el texto extraído no es comparable entre extractores.
+Se salta los PDF cuya ruta, mtime y tamaño no cambiaron y saca del
+índice los que ya no están en disco. Si el extractor disponible cambió
+desde la última corrida, reindexa todo, porque el texto extraído no es
+comparable entre extractores.
 """
 from __future__ import annotations
 import json
@@ -121,21 +122,13 @@ def listar(corpus: Path) -> None:
         print(f"{slug:<52} {pags:>5} p.  {(titulo or '')[:40]}")
     print(f"\n{len(filas)} documentos · {sum(f[1] or 0 for f in filas)} páginas")
 
-def main(argv: list[str]) -> int:
-    args = [a for a in argv if not a.startswith("--")]
-    banderas = {a for a in argv if a.startswith("--")}
-    corpus = E.resolver_corpus(args[0] if args else None)
-
-    if "--listar" in banderas:
-        listar(corpus)
-        return 0
+def indexar(corpus: Path, rehacer: bool = False, out=sys.stdout) -> dict:
     env = E.cargar()
     con = abrir_db(corpus)
-    rehacer = "--rehacer" in banderas
     previo = leer_meta(con, "extractor")
     if previo and previo != env["extractor"]:
         print(f"aviso: el extractor cambió de {previo} a {env['extractor']}; "
-              f"reindexando todo")
+              f"reindexando todo", file=out)
         rehacer = True
     if rehacer:
         con.execute("DELETE FROM pagina")
@@ -152,10 +145,11 @@ def main(argv: list[str]) -> int:
     if not pdfs:
         raise SystemExit(f"error: no hay PDFs bajo {corpus}")
 
-    t0 = time.time()
     nuevos = saltados = paginas_tot = 0
+    vistos = set()
     for ruta in pdfs:
         slug = ruta.stem
+        vistos.add(slug)
         st = ruta.stat()
         firma = (str(ruta), st.st_mtime, st.st_size)
         if conocidos.get(slug) == firma:
@@ -164,13 +158,14 @@ def main(argv: list[str]) -> int:
 
         paginas, info = extraer(ruta, env["extractor"])
         if not any(p.strip() for p in paginas):
-            print(f"aviso: '{slug}' no dio texto (¿PDF escaneado sin OCR?), se omite")
+            print(f"aviso: '{slug}' no dio texto (¿PDF escaneado sin OCR?), se omite",
+                  file=out)
             continue
         densidad = sum(len(p) for p in paginas) // max(1, len(paginas))
         if densidad < UMBRAL_DENSIDAD:
             print(f"[!] aviso: '{slug}' solo {densidad} car./pág.: parece un "
                   f"escaneo sin OCR y no será encontrable "
-                  f"(arreglo: ocrmypdf entrada.pdf salida.pdf)")
+                  f"(arreglo: ocrmypdf entrada.pdf salida.pdf)", file=out)
         con.execute("DELETE FROM pagina WHERE slug=?", (slug,))
         con.execute("DELETE FROM doc WHERE slug=?", (slug,))
         con.executemany(
@@ -183,21 +178,40 @@ def main(argv: list[str]) -> int:
              st.st_mtime, st.st_size, info["toc"]))
         nuevos += 1
         paginas_tot += len(paginas)
-        print(f"  + {slug[:56]:<56} {len(paginas):>5} p.")
+        print(f"  + {slug[:56]:<56} {len(paginas):>5} p.", file=out)
+
+    borrados = sorted(set(conocidos) - vistos)
+    for slug in borrados:
+        con.execute("DELETE FROM pagina WHERE slug=?", (slug,))
+        con.execute("DELETE FROM doc WHERE slug=?", (slug,))
+        print(f"  - {slug[:56]}", file=out)
 
     escribir_meta(con, "extractor", env["extractor"])
     con.commit()
-    if nuevos:
+    if nuevos or borrados:
         con.execute("INSERT INTO pagina(pagina) VALUES ('optimize')")
         con.commit()
     if rehacer:
         con.execute("VACUUM")  # sino cada reconstrucción deja páginas libres
     con.close()
+    return {"nuevos": nuevos, "borrados": len(borrados), "saltados": saltados,
+            "paginas": paginas_tot, "extractor": env["extractor"]}
 
+def main(argv: list[str]) -> int:
+    args = [a for a in argv if not a.startswith("--")]
+    banderas = {a for a in argv if a.startswith("--")}
+    corpus = E.resolver_corpus(args[0] if args else None)
+
+    if "--listar" in banderas:
+        listar(corpus)
+        return 0
+    t0 = time.time()
+    r = indexar(corpus, rehacer="--rehacer" in banderas)
     tam_db = E.ruta_db(corpus).stat().st_size / 1e6
-    print(f"\n{nuevos} indexados ({paginas_tot} páginas), {saltados} sin cambios "
+    print(f"\n{r['nuevos']} indexados ({r['paginas']} páginas), "
+          f"{r['borrados']} borrados, {r['saltados']} sin cambios "
           f"· {time.time() - t0:.1f} s · índice {tam_db:.1f} MB "
-          f"· extractor {env['extractor']}")
+          f"· extractor {r['extractor']}")
     return 0
 
 if __name__ == "__main__":

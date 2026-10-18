@@ -5,13 +5,12 @@
 
 Cada resultado es una línea:  slug p.123 · -9.84 · …fragmento…
 El puntaje es BM25: más negativo es mejor, y vienen ya ordenados.
-Si falta el índice, lo construye solo.
+Antes de buscar pone el índice al día: PDF nuevos, cambiados o borrados.
 """
 from __future__ import annotations
 import argparse
 import re
 import sqlite3
-import subprocess
 import sys
 from pathlib import Path
 
@@ -24,15 +23,11 @@ BLANCOS = re.compile(r"\s+")
 def _una_linea(s: str) -> str:
     return BLANCOS.sub(" ", s).strip()
 
-def _asegurar_indice(corpus: Path) -> None:
-    if E.ruta_db(corpus).is_file():
-        return
-    print(f"(no había índice en {corpus}; construyéndolo)", file=sys.stderr)
-    r = subprocess.run(
-        [sys.executable, str(Path(__file__).parent / "indexar.py"), str(corpus)],
-        stdout=sys.stderr)
-    if r.returncode != 0:
-        raise SystemExit("error: falló la indexación")
+def _actualizar_indice(corpus: Path) -> None:
+    from indexar import indexar
+    if not E.ruta_db(corpus).is_file():
+        print(f"(no había índice en {corpus}; construyéndolo)", file=sys.stderr)
+    indexar(corpus, out=sys.stderr)
 
 def _resolver_doc(con: sqlite3.Connection, doc: str) -> str:
     cands = [s for (s,) in con.execute("SELECT slug FROM doc")
@@ -76,14 +71,14 @@ def main(argv: list[str]) -> int:
     a = p.parse_args(argv)
 
     corpus = E.resolver_corpus(a.corpus)
+    if not a.consulta and not a.listar:
+        p.error("falta la consulta (o usa --listar)")
+
+    _actualizar_indice(corpus)
     if a.listar:
         from indexar import listar
         listar(corpus)
         return 0
-    if not a.consulta:
-        p.error("falta la consulta (o usa --listar)")
-
-    _asegurar_indice(corpus)
     con = sqlite3.connect(E.ruta_db(corpus))
     doc = _resolver_doc(con, a.doc) if a.doc else None
     filas, total = _buscar(con, a.consulta, a.n, doc, a.tokens)
