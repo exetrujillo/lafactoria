@@ -15,6 +15,7 @@ pisan.
 """
 from __future__ import annotations
 import json
+import re
 import sqlite3
 import subprocess
 import sys
@@ -26,7 +27,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import entorno as E
 
 UMBRAL_DENSIDAD = 200
-ESQUEMA_VERSION = "2"
+ESQUEMA_VERSION = "3"
+GUION_FIN_DE_LINEA = re.compile(r"(\w)-\n(\w)")
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS meta(clave TEXT PRIMARY KEY, valor TEXT);
@@ -37,6 +39,11 @@ CREATE VIRTUAL TABLE IF NOT EXISTS pagina USING fts5(
   slug UNINDEXED, pag UNINDEXED, texto,
   tokenize = "porter unicode61 remove_diacritics 2");
 """
+
+def _unir_guiones(texto: str) -> str:
+    """Pega las palabras cortadas con guion al final de línea. Se pierde el
+    guion de un compuesto legítimo que cayó justo ahí; se asume a propósito."""
+    return GUION_FIN_DE_LINEA.sub(r"\1\2", texto)
 
 def _partir_en_paginas(texto: str) -> list[str]:
     partes = texto.split("\f")
@@ -187,6 +194,7 @@ def indexar(corpus: Path, rehacer: bool = False, out=sys.stdout) -> dict:
             continue
 
         paginas, info = extraer(ruta, env["extractor"])
+        paginas = [_unir_guiones(p) for p in paginas]
         if not any(p.strip() for p in paginas):
             print(f"aviso: '{slug}' no dio texto (¿PDF escaneado sin OCR?), se omite",
                   file=out)

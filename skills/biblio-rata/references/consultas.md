@@ -57,6 +57,12 @@ quita el signo, reformula la consulta o pon la frase literal entre comillas.
 Los operadores solo deben escribirse a propósito; el buscador no modifica la
 consulta automáticamente.
 
+Al indexar se pegan las palabras cortadas con guion al final de línea
+(`succes-` / `sive` queda `successive`). El precio es que un compuesto legítimo
+cortado justo ahí pierde el guion: `state-of-the-` / `art` queda
+`state-of-theart`. Si un término compuesto no aparece, prueba también la forma
+pegada o sus partes con `OR`.
+
 ## Recetas para este corpus
 
 ```sh

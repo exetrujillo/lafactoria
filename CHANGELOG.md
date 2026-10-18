@@ -2,6 +2,12 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.14.0] - 2026-10-18
+
+### Cambiado
+
+- **`biblio-rata`: las palabras cortadas con guion al final de línea se pegan al indexar.** Los extractores conservan el corte tipográfico (`succes-` y `sive` en líneas distintas) y el tokenizador de FTS5 indexaba las dos mitades por separado, así que `buscar.py successive` no encontraba una página donde el término cayó partido, aunque el fragmento se leyera bien. `TEXT_DEHYPHENATE` de pymupdf no lo resuelve en la versión probada y `pdftotext` tiene el mismo problema, así que `indexar.py` une letra, guion y salto de línea seguidos de letra en el texto de cada página, después de extraer y antes de indexar, para las dos ramas de extracción. Lo que se indexa, lo que muestra el fragmento y lo que imprime `pagina.py` es el texto unido; la forma partida no se indexa. El precio, documentado en `consultas.md`, es que un compuesto legítimo cortado justo ahí pierde el guion (`state-of-the-` y `art` queda `state-of-theart`); si un término compuesto no aparece, probar la forma pegada o sus partes con `OR`. La versión de esquema sube a 3, con lo que los índices existentes se rehacen solos en la siguiente búsqueda. Lo encontró la auditoría lateral del 2026-10-18.
+
 ## [2.13.0] - 2026-10-18
 
 ### Cambiado
