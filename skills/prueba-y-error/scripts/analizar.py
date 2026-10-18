@@ -105,7 +105,7 @@ def bonferroni(pares_p):
 
 CORRECCIONES = {"holm": holm, "bonferroni": bonferroni}
 
-def analizar(observaciones, metodo, semilla, remuestreos, confianza, correccion, alfa):
+def analizar(observaciones, metodo, semilla, remuestreos, confianza, correccion, alfa, sentido):
     por_candidato = agrupar(observaciones)
     if len(por_candidato) < 2:
         raise ValueError("se necesitan al menos dos candidatos para comparar")
@@ -119,7 +119,7 @@ def analizar(observaciones, metodo, semilla, remuestreos, confianza, correccion,
             "intervalo": intervalo,
             "n": len(valores),
         }
-    orden = sorted(metricas, key=lambda nombre: metricas[nombre]["valor"], reverse=True)
+    orden = sorted(metricas, key=lambda nombre: metricas[nombre]["valor"], reverse=sentido == "mayor")
     crudos_p = []
     comparaciones = []
     for indice, uno in enumerate(orden):
@@ -142,7 +142,7 @@ def analizar(observaciones, metodo, semilla, remuestreos, confianza, correccion,
     return {"metricas": metricas, "orden": orden, "comparaciones": comparaciones,
             "familia": sorted(ajustados), "alpha": alfa, "correccion": correccion,
             "metodo": metodo, "semilla": semilla, "confianza": confianza,
-            "remuestreos": remuestreos, "casos": len(comunes)}
+            "remuestreos": remuestreos, "casos": len(comunes), "sentido": sentido}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -155,6 +155,8 @@ def main():
     parser.add_argument("--correccion", choices=sorted(CORRECCIONES), required=True)
     parser.add_argument("--alpha", type=float, default=0.05)
     parser.add_argument("--umbral", type=float, required=True)
+    parser.add_argument("--sentido", choices=("mayor", "menor"), required=True,
+                        help="si la métrica es mejor cuanto mayor o cuanto menor")
     parser.add_argument("--salida", type=Path, required=True)
     args = parser.parse_args()
     try:
@@ -170,7 +172,7 @@ def main():
         for ruta in args.crudo:
             observaciones.extend(cargar_crudo(ruta))
         analisis = analizar(observaciones, args.metodo, args.semilla, args.remuestreos,
-                            args.confianza, args.correccion, args.alpha)
+                            args.confianza, args.correccion, args.alpha, args.sentido)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(emitir("analisis", "error", {"motivo": exc}))
         return 2
@@ -191,6 +193,7 @@ def main():
     print(emitir("analisis", "ok", {
         "candidatos": len(analisis["metricas"]),
         "casos": analisis["casos"],
+        "sentido": args.sentido,
         "mejor": primero,
         "metrica": analisis["metricas"][primero]["valor"],
         "ic": analisis["metricas"][primero]["intervalo"],

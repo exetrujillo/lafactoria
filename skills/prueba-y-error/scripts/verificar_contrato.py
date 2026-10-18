@@ -14,6 +14,7 @@ OBLIGATORIAS = (
     "Umbral de relevancia", "Presupuesto", "Protocolo de control",
     "Criterio de parada",
 )
+SENTIDO = re.compile(r"(?im)^\s*(?:sentido|direction)\s*:\s*(mayor|menor)\s*$")
 MARCADORES = {
     "Métrica primaria": (r"(?im)^\s*(?:unidad|unit)\s*:",),
     "Umbral de relevancia": (r"[-+]?\d+(?:[.,]\d+)?",),
@@ -32,15 +33,21 @@ def secciones(texto):
         encontradas[coincidencia.group(1).strip()] = texto[coincidencia.end():fin].strip()
     return encontradas
 
+def sentido_del_contrato(texto):
+    """'mayor' o 'menor' según la métrica primaria; None si el contrato no lo declara."""
+    coincidencia = SENTIDO.search(secciones(texto).get("Métrica primaria", ""))
+    return coincidencia.group(1).lower() if coincidencia else None
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("contrato", type=Path)
     args = parser.parse_args()
     try:
-        encontradas = secciones(args.contrato.read_text(encoding="utf-8"))
+        texto = args.contrato.read_text(encoding="utf-8")
     except OSError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    encontradas = secciones(texto)
     errores = []
     for encabezado in OBLIGATORIAS:
         if encabezado not in encontradas:
@@ -53,6 +60,8 @@ def main():
             for marcador in MARCADORES.get(encabezado, ()):
                 if not re.search(marcador, encontradas[encabezado]):
                     errores.append(f"el encabezado '## {encabezado}' carece de un campo ejecutable")
+    if encontradas.get("Métrica primaria") and sentido_del_contrato(texto) is None:
+        errores.append("'## Métrica primaria' no declara 'sentido: mayor' o 'sentido: menor'")
     for error in errores:
         print(f"error: {error}")
     if errores:

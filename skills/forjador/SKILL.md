@@ -14,6 +14,20 @@ El forjador de la factoría dirige la creación y actualización de skills en
 `skills/<nombre>/SKILL.md`. Objetivo: máxima claridad en entender qué quiere
 el usuario y qué necesita, para luego generar o actualizar el resultado.
 
+## Antes de empezar
+
+Resuelve la fuente de La Factoría: el directorio que nombra `.factoria-origen`
+si existe junto a este archivo (ver "Dónde están las vivencias"), y si no, el
+de este SKILL.md subiendo hasta la raíz del repo, donde está `Cargo.toml`.
+Corre ahí `(cd <fuente> && cargo run --quiet -- remoto)`, porque `skillcheck`
+trabaja sobre el directorio actual. Con exit 1 y `detras>0` el remoto tiene
+commits que acá faltan: muéstrale al usuario los asuntos que imprime y ofrece
+actualizar. Si acepta, `(cd <fuente> && cargo run --quiet -- remoto
+--actualizar)` hace `git pull --ff-only` y refresca las copias instaladas; si
+se niega porque hay commits locales sin publicar o cambios sin commit, díselo
+y sigue sin tocar nada. Con exit 2 (sin red, sin remoto, sin upstream) basta
+una línea y seguir. Nada de esto bloquea la sesión.
+
 ## 1. Aclarar el propósito
 
 Antes de escribir nada, usa la herramienta disponible para hacer preguntas al usuario y

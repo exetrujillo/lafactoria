@@ -930,6 +930,115 @@ fn run_refrescar(filtro: Option<&str>, solo_en_copia: SoloEnCopia) {
     println!("{refrescadas} copia(s) refrescada(s)");
 }
 
+/// Posición del repositorio frente a su upstream, tal como la lee `remoto`.
+struct EstadoRemoto {
+    delante: usize,
+    detras: usize,
+    limpio: bool,
+    por_traer: Vec<String>,
+}
+
+// GIT_TERMINAL_PROMPT=0 hace que git falle en vez de pedir una contraseña, y
+// BatchMode hace lo mismo con la passphrase de una llave ssh sin agente:
+// forjador corre esto al comenzar y una pregunta colgada dejaría la sesión
+// esperando sin que nadie la vea. Si el usuario ya definió GIT_SSH_COMMAND,
+// manda la suya.
+fn git(repo: &Path, args: &[&str]) -> Result<String, String> {
+    let ssh = env::var("GIT_SSH_COMMAND").unwrap_or_else(|_| "ssh -oBatchMode=yes".to_string());
+    let salida = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", ssh)
+        .output()
+        .map_err(|e| format!("no se pudo ejecutar git: {e}"))?;
+    if !salida.status.success() {
+        let stderr = String::from_utf8_lossy(&salida.stderr);
+        let causa = stderr
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("falló sin mensaje")
+            .trim_start_matches("fatal: ")
+            .trim_start_matches("error: ");
+        return Err(format!("git {}: {causa}", args[0]));
+    }
+    Ok(String::from_utf8_lossy(&salida.stdout).trim_end().to_string())
+}
+
+fn estado_remoto(repo: &Path) -> Result<EstadoRemoto, String> {
+    git(repo, &["fetch", "--quiet"])?;
+    let conteo = git(repo, &["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])?;
+    let (delante, detras) = match conteo.split_once('\t') {
+        Some((a, b)) => match (a.trim().parse(), b.trim().parse()) {
+            (Ok(a), Ok(b)) => (a, b),
+            _ => return Err(format!("git rev-list: conteo ilegible '{conteo}'")),
+        },
+        None => return Err(format!("git rev-list: conteo ilegible '{conteo}'")),
+    };
+    let limpio = git(repo, &["status", "--porcelain"])?.is_empty();
+    let por_traer = if detras > 0 {
+        git(repo, &["log", "--oneline", "-10", "HEAD..@{upstream}"])?
+            .lines()
+            .map(str::to_string)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    Ok(EstadoRemoto { delante, detras, limpio, por_traer })
+}
+
+fn traer_remoto(repo: &Path) -> Result<(), String> {
+    git(repo, &["pull", "--ff-only", "--quiet"]).map(|_| ())
+}
+
+/// `skillcheck remoto [--actualizar]`: dice si el remoto tiene commits que
+/// acá faltan y, con `--actualizar`, los trae con `pull --ff-only` y refresca
+/// las copias registradas. Solo actualiza si no hay nada local sin publicar
+/// ni sin commit; si no, lo dice y la decisión queda en el usuario.
+fn run_remoto(actualizar: bool) {
+    let repo = Path::new(".");
+    let estado = match estado_remoto(repo) {
+        Ok(estado) => estado,
+        Err(e) => {
+            eprintln!("error: {e}");
+            exit(2);
+        }
+    };
+    println!(
+        "detras={} delante={} arbol={}",
+        estado.detras,
+        estado.delante,
+        if estado.limpio { "limpio" } else { "sucio" }
+    );
+    for linea in &estado.por_traer {
+        println!("  {linea}");
+    }
+    if estado.detras > estado.por_traer.len() {
+        println!("  ... y {} más", estado.detras - estado.por_traer.len());
+    }
+    if estado.detras == 0 {
+        if actualizar {
+            println!("nada que traer");
+        }
+        return;
+    }
+    if !actualizar {
+        exit(1);
+    }
+    if estado.delante > 0 || !estado.limpio {
+        let motivo = if estado.delante > 0 { "hay commits locales sin publicar" } else { "hay cambios sin commit" };
+        println!("no actualizo: {motivo}");
+        exit(1);
+    }
+    if let Err(e) = traer_remoto(repo) {
+        eprintln!("error: {e}");
+        exit(2);
+    }
+    println!("{} commit(s) traido(s)", estado.detras);
+    run_refrescar(None, SoloEnCopia::Frenar);
+}
+
 fn print_help() {
     println!("uso:");
     println!("  skillcheck lint [DIR]            valida las skills en DIR (por defecto: skills y priv-skills)");
@@ -938,6 +1047,8 @@ fn print_help() {
     println!("  skillcheck install NOMBRE --destino DIR  instala en DIR/.claude/skills (otro proyecto)");
     println!("  skillcheck instalaciones [NOMBRE]     lista las copias registradas y si están al día");
     println!("  skillcheck refrescar NOMBRE|--todas   reinstala las copias registradas desactualizadas");
+    println!("  skillcheck remoto [--actualizar]      dice si el remoto tiene commits nuevos; con --actualizar");
+    println!("      hace pull --ff-only y refrescar --todas si no hay nada local sin publicar ni sin commit");
     println!("  skillcheck install NOMBRE --adoptar-vivencias");
     println!("      copia a la fuente los archivos que solo existen en la copia instalada");
     println!("      (vivencias) antes de reemplazarla, en vez de abortar");
@@ -1013,6 +1124,17 @@ fn main() {
                 [nombre] if !nombre.starts_with('-') => run_refrescar(Some(nombre), solo_en_copia),
                 _ => {
                     eprintln!("{uso}");
+                    exit(2);
+                }
+            }
+        }
+        Some("remoto") => {
+            let resto: Vec<&str> = it.map(|s| s.as_str()).collect();
+            match resto.as_slice() {
+                [] => run_remoto(false),
+                ["--actualizar"] => run_remoto(true),
+                _ => {
+                    eprintln!("uso: skillcheck remoto [--actualizar]");
                     exit(2);
                 }
             }
@@ -1224,6 +1346,92 @@ mod tests {
         assert!(excluir_de_git(&sin_git, "demo", false).unwrap().is_empty(), "sin .git no toca nada");
         fs::remove_dir_all(&raiz).unwrap();
         fs::remove_dir_all(&sin_git).unwrap();
+    }
+
+    /// Corre git en el repo de prueba aislado de la configuración del usuario;
+    /// si git no está en el PATH, el test falla acá con el motivo.
+    fn git_prueba(repo: &Path, args: &[&str]) {
+        let salida = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .output()
+            .unwrap_or_else(|e| panic!("no se pudo ejecutar git (¿está en el PATH?): {e}"));
+        assert!(salida.status.success(), "git {args:?} falló: {}", String::from_utf8_lossy(&salida.stderr));
+    }
+
+    fn clonar_con_identidad(bare: &Path, clon: &Path) {
+        git_prueba(bare.parent().unwrap(), &["clone", "--quiet", bare.to_str().unwrap(), clon.to_str().unwrap()]);
+        git_prueba(clon, &["config", "user.name", "Prueba"]);
+        git_prueba(clon, &["config", "user.email", "prueba@example.invalid"]);
+        git_prueba(clon, &["config", "commit.gpgsign", "false"]);
+    }
+
+    fn commit_y_push(clon: &Path, archivo: &str) {
+        escribir(clon, archivo, archivo);
+        git_prueba(clon, &["add", archivo]);
+        git_prueba(clon, &["commit", "--quiet", "-m", archivo]);
+        git_prueba(clon, &["push", "--quiet", "-u", "origin", "HEAD"]);
+    }
+
+    /// Un bare con un commit inicial y dos clones al día con él.
+    fn remoto_con_dos_clones(raiz: &Path) -> (PathBuf, PathBuf) {
+        let bare = raiz.join("origen.git");
+        git_prueba(raiz, &["init", "--quiet", "--bare", bare.to_str().unwrap()]);
+        let a = raiz.join("a");
+        clonar_con_identidad(&bare, &a);
+        commit_y_push(&a, "inicial.txt");
+        let b = raiz.join("b");
+        clonar_con_identidad(&bare, &b);
+        (a, b)
+    }
+
+    #[test]
+    fn remoto_cuenta_lo_que_falta_y_lo_trae() {
+        let raiz = arbol_temporal("remoto");
+        let (a, b) = remoto_con_dos_clones(&raiz);
+        commit_y_push(&a, "segundo.txt");
+        let estado = estado_remoto(&b).unwrap();
+        assert_eq!((estado.detras, estado.delante, estado.limpio), (1, 0, true));
+        assert_eq!(estado.por_traer.len(), 1);
+        assert!(estado.por_traer[0].ends_with(" segundo.txt"), "{:?}", estado.por_traer);
+        traer_remoto(&b).unwrap();
+        let estado = estado_remoto(&b).unwrap();
+        assert_eq!((estado.detras, estado.delante), (0, 0));
+        assert!(estado.por_traer.is_empty());
+        assert!(b.join("segundo.txt").is_file());
+        fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn remoto_distingue_commits_locales_y_arbol_sucio() {
+        let raiz = arbol_temporal("remoto-local");
+        let (a, b) = remoto_con_dos_clones(&raiz);
+        commit_y_push(&a, "segundo.txt");
+        escribir(&b, "propio.txt", "propio");
+        git_prueba(&b, &["add", "propio.txt"]);
+        git_prueba(&b, &["commit", "--quiet", "-m", "propio"]);
+        let estado = estado_remoto(&b).unwrap();
+        assert_eq!((estado.detras, estado.delante, estado.limpio), (1, 1, true));
+        assert!(traer_remoto(&b).is_err(), "--ff-only no puede avanzar con un commit propio");
+        escribir(&b, "inicial.txt", "editado");
+        assert!(!estado_remoto(&b).unwrap().limpio);
+        fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn remoto_falla_en_una_linea_fuera_de_un_repo() {
+        let raiz = arbol_temporal("remoto-sin-git");
+        let error = match estado_remoto(&raiz) {
+            Ok(_) => panic!("un directorio sin .git no puede tener estado"),
+            Err(e) => e,
+        };
+        assert!(error.starts_with("git fetch: "), "{error}");
+        assert_eq!(error.lines().count(), 1, "{error}");
+        fs::remove_dir_all(&raiz).unwrap();
     }
 
     #[test]

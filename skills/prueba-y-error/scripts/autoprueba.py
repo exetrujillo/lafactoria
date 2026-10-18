@@ -21,6 +21,7 @@ Elegir el tope que maximiza aciertos.
 ## Métrica primaria
 Proporción de aciertos.
 unidad: proporción [0,1]
+sentido: mayor
 
 ## Traducción a la decisión
 Se adopta el tope que gane sobre el umbral.
@@ -62,10 +63,10 @@ def afirmar(descripcion, condicion, detalle=""):
     if not condicion:
         FALLOS.append(f"{descripcion} {detalle}".strip())
 
-def montar(raiz, ventaja):
+def montar(raiz, ventaja, sentido="mayor", sentido_plan=None):
     exp = raiz / "EXP"
     (exp / "crudos").mkdir(parents=True)
-    (exp / "contrato.md").write_text(CONTRATO, encoding="utf-8")
+    (exp / "contrato.md").write_text(CONTRATO.replace("sentido: mayor", f"sentido: {sentido}"), encoding="utf-8")
     (exp / "presupuesto.json").write_text(json.dumps({
         "max_corridas": 10, "max_segundos": 600, "max_consultas_banco": 200,
         "max_rondas": 5, "max_consultas_adaptativas": 60}), encoding="utf-8")
@@ -77,7 +78,8 @@ def montar(raiz, ventaja):
         "hash_banco": "b7d20be", "regla": "halving",
         "test_declarado": "permutación pareada, holm, alpha 0.05",
         "analisis": {"metodo": "bootstrap_pareado", "semilla": "s1", "correccion": "holm",
-                     "alpha": 0.05, "umbral": 0.05, "remuestreos": 2000},
+                     "alpha": 0.05, "umbral": 0.05, "remuestreos": 2000,
+                     "sentido": sentido_plan or sentido},
         "candidatos": [
             {"nombre": "base", "hipotesis": "referencia", "prediccion": {"direccion": "base"},
              "diseno": {"pareado": True},
@@ -104,6 +106,29 @@ def prueba_nulo(raiz):
     montar(raiz, 0.0)
     hecho = correr([AQUI / "ronda.py", "EXP/ronda.json", "--exp", "EXP"], raiz)
     afirmar("no inventa separación", "separa=no" in hecho.stdout, hecho.stdout)
+
+def prueba_sentido(raiz):
+    print("\nsentido menor: gana la media más baja")
+    exp = montar(raiz / "menor", 0.09, sentido="menor")
+    hecho = correr([AQUI / "ronda.py", "EXP/ronda.json", "--exp", "EXP"], raiz / "menor")
+    afirmar("la ronda con sentido menor termina bien", hecho.returncode == 0, hecho.stdout + hecho.stderr)
+    afirmar("corona al candidato de media más baja", "mejor=base" in hecho.stdout, hecho.stdout)
+    afirmar("el efecto sale negativo", "efecto=-" in hecho.stdout, hecho.stdout)
+    afirmar("detecta la separación con sentido menor", "separa=si" in hecho.stdout, hecho.stdout)
+    analisis = json.loads((exp / "analisis" / "it1.json").read_text(encoding="utf-8"))
+    afirmar("el análisis guarda el sentido", analisis.get("sentido") == "menor")
+
+    print("\nsentido discrepante entre contrato y plan: la ronda no arranca")
+    exp = montar(raiz / "discrepa", 0.09, sentido="menor", sentido_plan="mayor")
+    hecho = correr([AQUI / "ronda.py", "EXP/ronda.json", "--exp", "EXP"], raiz / "discrepa")
+    afirmar("la ronda queda bloqueada", hecho.returncode == 1 and "estado=bloqueado" in hecho.stdout, hecho.stdout)
+    afirmar("no escribe recibos ni ledger",
+            not (exp / "runs").exists() and not (exp / "ledger.jsonl").exists())
+    ronda = json.loads((exp / "ronda.json").read_text(encoding="utf-8"))
+    del ronda["analisis"]["sentido"]
+    (exp / "ronda.json").write_text(json.dumps(ronda), encoding="utf-8")
+    hecho = correr([AQUI / "ronda.py", "EXP/ronda.json", "--exp", "EXP"], raiz / "discrepa")
+    afirmar("rechaza un plan sin sentido", hecho.returncode == 2 and "sentido" in hecho.stdout, hecho.stdout)
 
 def prueba_manipulacion(exp):
     print("\nmanipulación posterior del registro")
@@ -302,6 +327,10 @@ def prueba_contrato(raiz):
     afirmar("acepta un contrato completo", hecho.returncode == 0, hecho.stdout)
     hecho = correr([AQUI / "verificar_contrato.py", "sin_presupuesto.md"], raiz)
     afirmar("rechaza un contrato sin límites de presupuesto", hecho.returncode == 1, hecho.stdout)
+    (raiz / "sin_sentido.md").write_text(CONTRATO.replace("sentido: mayor\n", ""), encoding="utf-8")
+    hecho = correr([AQUI / "verificar_contrato.py", "sin_sentido.md"], raiz)
+    afirmar("rechaza un contrato sin sentido de la métrica",
+            hecho.returncode == 1 and "sentido" in hecho.stdout, hecho.stdout)
 
 def main():
     print("autoprueba del arnés de prueba-y-error")
@@ -319,6 +348,8 @@ def main():
         prueba_nulo(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         prueba_diagnostico(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        prueba_sentido(Path(tmp))
     prueba_correccion_bonferroni()
     print()
     if FALLOS:

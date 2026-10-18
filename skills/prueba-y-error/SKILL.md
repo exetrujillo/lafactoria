@@ -56,7 +56,9 @@ Al invocarse esta skill **no se empieza a experimentar**. El primer acto es una
 sola llamada a la herramienta disponible para hacer preguntas que fije el
 experimento completo y ponga sobre la mesa:
 
-- **Qué se mediría** exactamente: la magnitud y su unidad, no "si funciona mejor".
+- **Qué se mediría** exactamente: la magnitud, su unidad y su sentido (mejor
+  cuanto mayor, como aciertos, o cuanto menor, como latencia o costo), no "si
+  funciona mejor".
 - **Qué costaría**: cuántas corridas, cuánto tiempo, cuánto contexto.
 - **Qué se pierde si no se mide**: el costo de equivocarse en esta decisión.
 
@@ -145,14 +147,17 @@ el triage, la decisión.
 
 - `scripts/correr.py` ejecuta el protocolo y emite el recibo del consumo medido.
 - `scripts/analizar.py` recalcula métrica, intervalo, efecto, valor p por
-  permutación pareada y corrección Holm o Bonferroni desde el crudo.
+  permutación pareada y corrección Holm o Bonferroni desde el crudo. `--sentido`
+  dice si la métrica es mejor cuanto mayor o cuanto menor; el efecto es mejor
+  menos segundo en unidades de la métrica, negativo cuando el sentido es menor.
 - `scripts/ledger.py` deriva cada `resultado` del recibo y del análisis, y su
   `check` relee ambos en disco: si alguien edita una métrica ya escrita o
   reescribe o borra un crudo, la verificación falla. La interpretación —veredicto, triage,
   decisión— no entra ahí: va en un registro aparte, `ledger.py diagnostico`, que
   escribe el agente.
 - `scripts/verificar_presupuesto.py` suma recibos y los concilia con el ledger.
-- `scripts/verificar_contrato.py` cierra el nodo 0 con campos ejecutables.
+- `scripts/verificar_contrato.py` cierra el nodo 0 con campos ejecutables, entre
+  ellos el sentido de la métrica, que `ronda.py` exige igual en `ronda.json`.
 - `scripts/verificar_reporte.py --strict --claims-json` exige y valida los claims;
   los números del texto que no aparecen en el ledger siempre quedan como advertencias.
 - `scripts/ronda.py` encadena todo lo anterior para una ronda entera, y no abre
@@ -286,7 +291,7 @@ python3 scripts/verificar_reporte.py EXP/reporte.md EXP/ledger.jsonl \
  "test_declarado": "permutación pareada, holm, alpha 0.05",
   "analisis": {"metodo": "bootstrap_pareado", "semilla": "s1",
                "correccion": "holm", "alpha": 0.05, "umbral": 0.05,
-               "remuestreos": 10000},
+               "sentido": "mayor", "remuestreos": 10000},
  "timeout": 1800.0,
   "candidatos": [
    {"nombre": "tope-4", "hipotesis": "...", "prediccion": {"direccion": "base"},
@@ -302,7 +307,7 @@ para depurar:
 python3 scripts/correr.py --run-id it1-c --recibos EXP/runs --crudo EXP/crudos/it1-c.jsonl \
   --iteracion 1 --candidato c --fase A --hash-contrato HASH -- python3 protocolo.py EXP/crudos/it1-c.jsonl
 python3 scripts/analizar.py EXP/crudos/*.jsonl --metodo bootstrap_pareado --semilla s1 \
-  --correccion holm --alpha 0.05 --umbral 0.05 --salida EXP/analisis/it1.json
+  --correccion holm --alpha 0.05 --umbral 0.05 --sentido mayor --salida EXP/analisis/it1.json
 python3 scripts/ledger.py resultado EXP/ledger.jsonl --contrato EXP/contrato.md \
   --fase A --iteracion 1 --candidato c --recibo EXP/runs/it1-c.json \
   --analisis EXP/analisis/it1.json --test-aplicado '...'

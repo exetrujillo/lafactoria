@@ -2,6 +2,16 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.9.0] - 2026-10-18
+
+### Agregado
+
+- **`skillcheck remoto` y `remoto --actualizar`.** `remoto` hace `git fetch` en el repositorio actual e imprime `detras=N delante=M arbol=limpio|sucio` más los asuntos de los commits por traer; exit 0 si no hay nada, 1 si hay commits por traer, 2 si falló (sin remoto, sin upstream, sin red) con la causa en una línea. Con `--actualizar` hace `git pull --ff-only` y después lo mismo que `refrescar --todas`, pero solo si no hay commits locales sin publicar ni cambios sin commit; si los hay, no toca nada y lo dice. Fuerza `GIT_TERMINAL_PROMPT=0` y `ssh -oBatchMode=yes` (salvo que `GIT_SSH_COMMAND` ya venga definida) para que nunca quede esperando una contraseña o una passphrase. `forjador` lo corre al comenzar sobre la fuente y, si hay novedades, ofrece actualizar.
+
+### Cambiado
+
+- **`prueba-y-error` exige el sentido de la métrica.** `analizar.py` ordenaba los candidatos de mayor a menor siempre, así que con latencia, costo o error el parte coronaba al peor y declaraba separación, y el SKILL.md manda decidir con el parte. Ahora el contrato declara `sentido: mayor` o `sentido: menor` en "Métrica primaria" (`verificar_contrato.py` lo exige), `ronda.json` lo repite en `analisis.sentido`, `ronda.py` bloquea la ronda si no coinciden y `analizar.py` recibe `--sentido`. El efecto sigue siendo mejor menos segundo en unidades de la métrica, negativo cuando el sentido es menor. Incompatible: los contratos y `ronda.json` existentes dejan de validar hasta sumar el sentido en los dos lados. La autoprueba cubre sentido menor, sentido discrepante y contrato sin sentido. Lo encontró la auditoría lateral del 2026-10-18.
+
 ## [2.8.0] - 2026-10-18
 
 ### Agregado

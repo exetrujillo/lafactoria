@@ -76,8 +76,9 @@ encabeza todas las líneas siguientes. **Se congela**: si cambia, cambia el
 hash y empieza otro experimento.
 
 Antes de avanzar, `scripts/verificar_contrato.py` rechaza las secciones que
-falten, estén vacías o carezcan de unidad, umbral numérico, límites de
-presupuesto, entrada/salida del protocolo y criterio de parada ejecutable.
+falten, estén vacías o carezcan de unidad, sentido de la métrica (`sentido:
+mayor` o `sentido: menor`), umbral numérico, límites de presupuesto,
+entrada/salida del protocolo y criterio de parada ejecutable.
 `scripts/ledger.py` calcula el hash, conserva el linaje con
 `hash_contrato_anterior` y `check` impide que un resultado se apoye en un plan
 huérfano.
@@ -128,7 +129,7 @@ corrección por comparación múltiple.
 `scripts/verificar_reporte.py --strict --claims-json` valida claims estructurados
 contra resultados identificados por linaje: recomputa el efecto y comprueba que
 los intervalos estén ordenados. Los requisitos de separación se exigen sólo a
-`RECOMENDAR` —intervalo del efecto por encima del umbral, p ajustado bajo el
+`RECOMENDAR` —intervalo del efecto que excluye el umbral, p ajustado bajo el
 alfa, fuentes A/B disjuntas y confirmación independiente— porque `SEGUIR
 MIDIENDO` y `ABANDONAR` son precisamente los veredictos que reportan su ausencia.
 Los números del texto sin respaldo son siempre advertencias, incluso con `--strict`.

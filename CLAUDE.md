@@ -30,6 +30,7 @@ cargo run --quiet -- install NOMBRE --descartar-vivencias  # borrarlo de la copi
 cargo run --quiet -- install NOMBRE --destino DIR  # instalar en DIR/.claude/skills (otro proyecto)
 cargo run --quiet -- instalaciones [NOMBRE]  # copias registradas y si están al día con su fuente
 cargo run --quiet -- refrescar NOMBRE|--todas  # reinstalar las copias registradas desactualizadas
+cargo run --quiet -- remoto [--actualizar]   # commits nuevos en el remoto; con --actualizar, pull --ff-only y refrescar --todas
 cargo test --quiet                           # tests unitarios de skillcheck
 ```
 
@@ -150,6 +151,21 @@ entera si la skill es personal, o solo su `.factoria-origen` si es pública.
   sin ser ella misma un enlace, porque `install` borra el destino antes de
   copiar. `skills_enlazadas` las lista para `instalaciones`; no entran en
   `instalaciones.tsv`, que registra copias.
+- `remoto` (`estado_remoto` + `run_remoto`) corre `git fetch --quiet` con
+  `GIT_TERMINAL_PROMPT=0`, para que git falle en vez de pedir una contraseña,
+  y cuenta con `rev-list --left-right --count HEAD...@{upstream}` los commits
+  locales sin publicar (`delante`) y los del remoto que faltan acá (`detras`);
+  `status --porcelain` dice si el árbol está limpio. Imprime
+  `detras=N delante=M arbol=limpio|sucio` y los asuntos por traer, con exit 0
+  si no hay nada que traer, 1 si lo hay y 2 si git falló (sin repo, sin
+  upstream, sin red), con la causa en una sola línea. `--actualizar` hace
+  `pull --ff-only` y después `run_refrescar(None, ..)`, pero solo con
+  `delante == 0` y árbol limpio; si no, lo dice con exit 1 y la decisión
+  queda en el usuario. `forjador` lo corre al comenzar sobre la fuente. El
+  cálculo (`estado_remoto`, `traer_remoto`) está separado de la impresión y
+  del `exit` para que los tests lo cubran con un bare y dos clones;
+  `run_refrescar` queda fuera de ese camino porque trabaja sobre el directorio
+  actual.
 - `localizar_skill` resuelve el NOMBRE de `install` recorriendo `RAICES` en
   orden, así que una skill privada se instala con el mismo comando que una
   pública. Los mensajes de error de `run_install` usan `fuente` —la ruta que

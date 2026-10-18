@@ -20,6 +20,7 @@ sys.path.insert(0, str(AQUI))
 from parte import emitir  # noqa: E402
 from ledger import LARGO_HASH, leer_registros  # noqa: E402
 from verificar_presupuesto import cargar_recibos, formatear_saldo, sumar_recibos  # noqa: E402
+from verificar_contrato import sentido_del_contrato  # noqa: E402
 
 def correr(argumentos):
     return subprocess.run([sys.executable, *argumentos], capture_output=True, text=True)
@@ -47,8 +48,9 @@ def cargar_plan(ruta):
         exigir(campo in plan, f"el plan de ronda no declara '{campo}'")
     exigir(isinstance(plan["candidatos"], list) and len(plan["candidatos"]) >= 2,
            "una ronda comparativa necesita al menos dos candidatos")
-    for campo in ("metodo", "semilla", "correccion", "alpha", "umbral"):
+    for campo in ("metodo", "semilla", "correccion", "alpha", "umbral", "sentido"):
         exigir(campo in plan["analisis"], f"analisis no declara '{campo}'")
+    exigir(plan["analisis"]["sentido"] in ("mayor", "menor"), "analisis.sentido debe ser 'mayor' o 'menor'")
     nombres = [candidato.get("nombre") for candidato in plan["candidatos"]]
     exigir(all(nombres) and len(nombres) == len(set(nombres)),
            "cada candidato necesita un 'nombre' distinto")
@@ -73,6 +75,21 @@ def main():
     analisis_ruta = exp / "analisis" / f"it{iteracion}.json"
     fuentes = plan.get("fuentes") or str(exp / "fuentes.json")
     conf = plan["analisis"]
+
+    # 0. El contrato manda sobre el sentido de la métrica, pero no corrige el plan
+    #    en silencio: si difieren, alguien escribió uno de los dos pensando al revés.
+    try:
+        sentido_contrato = sentido_del_contrato(contrato.read_text(encoding="utf-8"))
+    except OSError as exc:
+        print(emitir("ronda", "error", {"motivo": exc}))
+        return 2
+    if sentido_contrato != conf["sentido"]:
+        print(emitir("ronda", "bloqueado", {
+            "iteracion": iteracion, "motivo": "el sentido de la métrica no coincide",
+            "sentido_contrato": sentido_contrato, "sentido_plan": conf["sentido"]},
+            detalle=f"{contrato} declara sentido: {sentido_contrato or 'ninguno'}; "
+                    f"{args.plan} declara analisis.sentido: {conf['sentido']}"))
+        return 1
 
     # 1. El presupuesto se consulta antes de gastar, no después.
     previo = correr([str(AQUI / "verificar_presupuesto.py"), "--recibos", str(recibos),
@@ -146,7 +163,7 @@ def main():
     hecho = correr([str(AQUI / "analizar.py"), *crudos, "--metodo", conf["metodo"],
                     "--semilla", str(conf["semilla"]), "--correccion", conf["correccion"],
                     "--alpha", str(conf["alpha"]), "--umbral", str(conf["umbral"]),
-                    "--remuestreos", str(conf.get("remuestreos", 10000)),
+                    "--sentido", conf["sentido"], "--remuestreos", str(conf.get("remuestreos", 10000)),
                     "--confianza", str(conf.get("confianza", 0.95)), "--salida", str(analisis_ruta)])
     if hecho.returncode != 0:
         print(emitir("ronda", "error", {"iteracion": iteracion, "motivo": "análisis falló"},
@@ -175,7 +192,7 @@ def main():
     print(emitir("ronda", "ok" if verificacion.returncode == 0 and not fallos else "bloqueado", {
         "iteracion": iteracion, "fase": fase,
         "corridas_ok": f"{len(corridas)}/{len(plan['candidatos'])}",
-        "mejor": orden[0], "metrica": analisis["metricas"][orden[0]]["valor"],
+        "sentido": conf["sentido"], "mejor": orden[0], "metrica": analisis["metricas"][orden[0]]["valor"],
         "ic": analisis["metricas"][orden[0]]["intervalo"],
         "segundo": top["segundo"], "efecto": top["efecto"],
         "ic_efecto": top["intervalo_efecto"], "p_ajustado": top["p_ajustado"],
