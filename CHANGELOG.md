@@ -2,6 +2,12 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.15.0] - 2026-10-18
+
+### Cambiado
+
+- **`chatarrero`: los sondeos de nivel 4 y 5 son scripts de la skill y siguen `cascada.md`.** `scripts/sondear_browser.py` y `scripts/sondear_nodriver.py` existían desde 1.13.0 pero ni `SKILL.md` ni `references/` los nombraban, así que el subagente del paso 2 improvisaba, y además divergían de lo que la cascada documenta: sin `ignore_https_errors`, settle de 10 s en vez de 4, headful con cualquier cuarto argumento y sin mirar `DISPLAY`, UA incompleta, locale fijo en `en-US`, traceback en vez de salida ante un fallo de carga, `nodriver` headful sin comprobar display, `CHROME_BIN` obligatorio, `sleep(15)` fijo en vez de polling y con `PDF_OUTPUT` la URL se pedía dos veces. Ahora el paso 2 nombra cada script con sus argumentos y variables (`SONDEO_LOCALE`, `CHROME_BIN`, `PDF_OUTPUT`), los dos escriben las mismas claves (`status`, `title`, `url`, `challenge=si|no` por las señales de `cascada.md`, `body` a 2000 caracteres, o `error=` con exit 1), el de Playwright carga con `domcontentloaded` más 4 s, UA real y locale por variable, y el de `nodriver` exige `DISPLAY` o `WAYLAND_DISPLAY` salvo `--headless` para pruebas, hace polling de 1 s con techo de 15 s, intenta `verify_cf()` sin romper si falta opencv, pasa el intersticial de certificado con `bypass_insecure_connection_warning()`, captura el status del documento principal por CDP y con `PDF_OUTPUT` navega una vez y descarga el primer PDF enlazado (`download_file` hace un fetch desde la página cargada, así que una URL que ya es el PDF se reporta sin descargar). El nivel 5b queda explícito como bloqueo que el subagente devuelve y la conversación principal plantea al usuario. Probados en headless contra un servidor local, con certificado autofirmado y conexión rechazada; los modos headful y un Turnstile real siguen sin medir. Lo encontró la auditoría lateral del 2026-10-18.
+
 ## [2.14.0] - 2026-10-18
 
 ### Cambiado

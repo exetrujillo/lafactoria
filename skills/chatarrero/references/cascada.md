@@ -59,6 +59,7 @@ Matiz: una SPA renderizada en servidor no es una cáscara aunque el HTML pese ci
 - UA de navegador real + locale del país.
 - Si el entorno es cluster/servidor: pinnear la versión de Playwright y recordar `playwright install chromium chromium-headless-shell` (el headless shell es binario separado en versiones nuevas).
 - El flujo puntual de navegador (descarga con `expect_download`, PDFs, etc.) puede vivir en un script aparte con venv propio para no volver Playwright requisito del resto del proyecto.
+- Sondeo del paso 2: `scripts/sondear_browser.py URL SALIDA [--headful]` aplica lo anterior (`domcontentloaded` más 4 s, `ignore_https_errors`, UA real, locale por `SONDEO_LOCALE`) y escribe `status=`, `title=`, `url=`, `challenge=si|no` y `body=`.
 
 ## Nivel 5 — Navegador anti-bot (Cloudflare Turnstile / WAF duro)
 
@@ -70,6 +71,7 @@ Matiz: una SPA renderizada en servidor no es una cáscara aunque el HTML pese ci
 - **`curl_cffi` con `impersonate="chrome"`**: probado, no bastó para el caso duro; puede servir para WAFs más blandos.
 - **`nodriver`** (undetected Chromium): el único que pasó Turnstile en nuestras pruebas. Race condition de arranque: reintentar el endpoint `version` de la API HTTP hasta 30×0,5 s. Proyecto activo; desde la versión 0.50 opera en "flat mode" e incluye iframes en `tab.find()`/`tab.select()`, así que puede localizar el checkbox "verify you are human" dentro del iframe del challenge; `tab.verify_cf()` lo encuentra por plantilla de imagen y lo clickea solo (requiere `opencv-python` y no funciona en expert mode; la plantilla incluida es la del checkbox en inglés, para otro idioma hay que recortar una propia), y `tab.bypass_insecure_connection_warning()` cubre certificados inválidos. Licencia AGPL-3.0: sin problema para herramientas privadas, pero ojo si el scraper se distribuye.
 - **Detección de challenge por markers**: título `"Just a moment..."`/"Un momento", contenido `cf-challenge`/`challenges.cloudflare.com` → polling (~1 s paso, 15 s techo) dejando que el navegador lo resuelva solo, luego backoff y reintento. `wait_selector` para re-capturar el DOM después del challenge.
+- Sondeo del paso 2: `scripts/sondear_nodriver.py URL SALIDA` hace ese polling, prueba `verify_cf()` si el challenge persiste, aplica `bypass_insecure_connection_warning()` ante un certificado inválido y escribe las mismas claves que el sondeo del nivel 4. Headful: exige `DISPLAY` o `WAYLAND_DISPLAY`.
 - Portada que a veces carga sin cards: re-navegar hasta 3 intentos.
 - **Si el bloqueo es a la automatización misma** (logins que bloquean CDP): Chromium real headful + sesión real persistida en volumen + extensión de navegador propia que manipula el DOM.
 - **Otras herramientas, sin medición propia.** Estado, licencia y API verificados en su documentación y su repositorio (2026-10, las cuatro con actividad reciente). Se prueban en el sondeo del paso 2 antes de adoptarlas:

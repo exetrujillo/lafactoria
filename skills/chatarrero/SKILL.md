@@ -64,7 +64,20 @@ este contrato corto:
 
 - Entrada: URL objetivo, qué dato se busca, tope duro de requests (≤20).
 - Tarea: probar en orden los niveles de references/cascada.md hasta que uno
-  devuelva el contenido buscado de verdad.
+  devuelva el contenido buscado de verdad. Los niveles 4 y 5 se sondean con
+  los scripts de la skill, no improvisando (cada uno necesita su paquete,
+  `playwright` o `nodriver`, en un venv aparte):
+  - Nivel 4: `scripts/sondear_browser.py URL SALIDA [--headful]` (Playwright
+    headless; `SONDEO_LOCALE` fija el locale, `--headful` exige `DISPLAY`).
+  - Nivel 5: `scripts/sondear_nodriver.py URL SALIDA` (nodriver headful, exige
+    `DISPLAY` o `WAYLAND_DISPLAY`; `CHROME_BIN` fija el binario, `PDF_OUTPUT`
+    descarga el primer PDF enlazado, `--headless` solo para probar el script).
+  Los dos escriben en SALIDA `status=`, `title=`, `url=`, `challenge=si|no` y
+  `body=`, o `error=`. Cada corrida carga la página una vez (dos con
+  `PDF_OUTPUT`) y cuenta así contra el tope.
+- El nivel 5b (captcha manual, references/captcha-manual.md) no lo resuelve
+  el subagente: si el challenge persiste tras el nivel 5, lo devuelve como
+  bloqueo y la conversación principal se lo plantea al usuario.
 - Salida en ≤10 líneas: nivel mínimo que funcionó, evidencia (status, cantidad
   de texto/selectores que matchearon), bloqueos detectados (challenges, cuerpo
   vacío, WAF) y headers que hicieron falta.
