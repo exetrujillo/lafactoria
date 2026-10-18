@@ -2,6 +2,12 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.16.0] - 2026-10-18
+
+### Cambiado
+
+- **`chatarrero`: una sola fuente para la pausa entre pedidos, y el sondeo del paso 2 la recibe.** Convivían tres cifras: "referencia 5 s" en la regla de cortesía, `pausa_entre_pedidos_s: 8` en `vivencias/ajustes.json` y una prosa que reservaba los 8 s para "sitios sensibles a bloqueos", sin decir qué iba en un sitio normal. Ningún paso numerado mandaba leer `ajustes.json`, y el contrato del subagente no transmitía pausa alguna: en la auditoría dos requests del sondeo salieron con 0,01 s de separación. Ahora la compuerta del paso 0 lee `vivencias/ajustes.json` (resolviendo `vivencias/` vía `.factoria-origen`, como ya explica "Vivencias propias") y toma de ahí `pausa_entre_pedidos_s`, con 8 s si no hay vivencias; el contrato del paso 2 la entrega al subagente como pausa mínima entre pedidos, también entre niveles y entre reintentos, y el subagente la aplica entre invocaciones de los scripts, que sondean una URL por corrida; la regla de cortesía remite al ajuste en vez de fijar una cifra, y el scraper la usa como mínimo. La descripción del ajuste pasa a "pausa mínima entre pedidos, en el sondeo y en el scraper; 8 por defecto", y el endurecimiento ante bloqueos se expresa como duplicarla tras un 403 o 429, sin segunda cifra. `ajustes.json`, el validador y los backoffs propios de `cascada.md` no cambian. Lo encontró la auditoría lateral del 2026-10-18.
+
 ## [2.15.0] - 2026-10-18
 
 ### Cambiado

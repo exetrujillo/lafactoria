@@ -29,6 +29,10 @@ Al invocarse no se escribe código. Primero busca por tu cuenta, sin preguntar:
   el crudo, settings de cortesía.
 - Skills ya instaladas en `.claude/skills/` del proyecto: si hay una skill de
   navegador/fetching propia del repo, respétala y no la dupliques.
+- `vivencias/ajustes.json`, resolviendo `vivencias/` como explica "Vivencias
+  propias": de ahí sale `pausa_entre_pedidos_s`, la pausa mínima entre pedidos
+  que usan el sondeo del paso 2 y el scraper. Sin vivencias (clon fresco o
+  marcador roto), la pausa es 8 s.
 
 Después, una sola tanda de preguntas al usuario:
 
@@ -62,7 +66,9 @@ Criterios, en orden:
 El nivel de la cascada se decide midiendo, no opinando. Lanza un subagente con
 este contrato corto:
 
-- Entrada: URL objetivo, qué dato se busca, tope duro de requests (≤20).
+- Entrada: URL objetivo, qué dato se busca, tope duro de requests (≤20) y la
+  pausa mínima entre pedidos, con el `pausa_entre_pedidos_s` leído en el paso
+  0; vale también entre niveles y entre reintentos.
 - Tarea: probar en orden los niveles de references/cascada.md hasta que uno
   devuelva el contenido buscado de verdad. Los niveles 4 y 5 se sondean con
   los scripts de la skill, no improvisando (cada uno necesita su paquete,
@@ -74,7 +80,8 @@ este contrato corto:
     descarga el primer PDF enlazado, `--headless` solo para probar el script).
   Los dos escriben en SALIDA `status=`, `title=`, `url=`, `challenge=si|no` y
   `body=`, o `error=`. Cada corrida carga la página una vez (dos con
-  `PDF_OUTPUT`) y cuenta así contra el tope.
+  `PDF_OUTPUT`) y cuenta así contra el tope. Sondean una URL por corrida, así
+  que la pausa la aplica el subagente entre invocaciones.
 - El nivel 5b (captcha manual, references/captcha-manual.md) no lo resuelve
   el subagente: si el challenge persiste tras el nivel 5, lo devuelve como
   bloqueo y la conversación principal se lo plantea al usuario.
@@ -134,8 +141,9 @@ cambie algo.
 - **catch-log-continue**: un ítem malo loguea y se salta, nunca tumba el lote.
   Campo obligatorio faltante → log con marcador claro + skip.
 - **Nunca inventar datos**: ante cambio de estructura devolver vacío + warning.
-- **Cortesía**: delay entre requests (referencia 5 s), sleep adaptativo si la
-  página no trae nada nuevo, circuit breaker tras varios bloqueos seguidos.
+- **Cortesía**: pausa mínima entre requests igual a `pausa_entre_pedidos_s`
+  (ver "Vivencias propias"), sleep adaptativo si la página no trae nada nuevo,
+  circuit breaker tras varios bloqueos seguidos.
 - **Fechas UTC ISO 8601 con `Z`**; URLs canónicas (sin utm, sin www, sin
   slash final) para deduplicar.
 - **Documentar con números**: cada táctica adoptada o descartada se anota con
@@ -170,10 +178,12 @@ directorio es la fuente. Si el marcador apunta a una ruta que ya no existe,
 sigue sin vivencias (no leas ni escribas ninguna) y avísale al usuario que
 reinstale la skill desde donde esté ahora su fuente.
 
-Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus preferencias:
+Lee `vivencias/ajustes.json` al comenzar una corrida (es parte de la compuerta
+del paso 0) y respeta sus preferencias:
 
-- `pausa_entre_pedidos_s` (number): pausa por defecto entre pedidos; usar 8
-  segundos en corridas donde el sitio sea sensible a bloqueos.
+- `pausa_entre_pedidos_s` (number): pausa mínima entre pedidos, en el sondeo
+  del paso 2 y en el scraper; 8 por defecto. Ante un 403 o 429, duplicarla en
+  esa corrida en vez de fijar otra cifra.
 - `navegador_por_defecto` (string): navegador que se intentará primero cuando
   la cascada llegue al nivel anti-bot; el valor actual es `nodriver`.
 
