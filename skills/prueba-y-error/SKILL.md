@@ -129,9 +129,14 @@ Ocho. Valen en todos los nodos. Si uno se rompe, lo que salga del bucle no es ev
    tiempo con el reloj, cuenta las consultas leyendo el crudo y emite un recibo
    inmutable por corrida, incluidas las que fallan o se abortan.
    `scripts/verificar_presupuesto.py` suma recibos, no campos del ledger, y
-   bloquea la ronda si ambos discrepan. Agotar el presupuesto no demuestra
-   eficacia: por sí solo produce `SEGUIR MIDIENDO` o `ABANDONAR`, nunca
-   `RECOMENDAR`.
+   bloquea la ronda si ambos discrepan. `scripts/ronda.py` le pasa además la
+   cota de la ronda entera —tantas corridas como candidatos, candidatos por
+   casos del banco en consultas, candidatos por `timeout` en segundos, una
+   ronda, y adaptativas si el banco ya se consultó en el linaje— y no arranca
+   si consumido más cota supera algún límite. Por eso el `timeout` de
+   `ronda.json` es una cota real, no un valor generoso. Agotar el presupuesto
+   no demuestra eficacia: por sí solo produce `SEGUIR MIDIENDO` o
+   `ABANDONAR`, nunca `RECOMENDAR`.
 
 8. **El halving necesita una garantía de supervivencia.** Una observación por
    candidato solo sirve para tamizar si el contrato acepta explícitamente el riesgo
@@ -208,8 +213,8 @@ Después de la compuerta, ejecuta estos pasos sin pedir confirmación entre ello
    alcanza para decidir**: no abras los crudos ni el ledger salvo para auditar un
    fallo concreto.
 4. Aplica la política de selección. Si el criterio de parada no se cumple, escribe
-   el `ronda.json` siguiente y vuelve al paso 2. `ronda.py` comprueba el
-   presupuesto antes de gastar y se bloquea solo.
+   el `ronda.json` siguiente y vuelve al paso 2. `ronda.py` comprueba que la
+   ronda entera quepa en el presupuesto antes de gastar y se bloquea solo.
 5. Cuando se cumple un criterio de parada, redacta el informe y su `claims.json`
    desde el ledger. Las cifras de cada comparación (`efecto`, `intervalo_efecto`,
    `p_ajustado`, `umbral`, `alpha`) se copian tal cual del `analisis/itN.json` que

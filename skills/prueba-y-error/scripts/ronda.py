@@ -18,7 +18,8 @@ from pathlib import Path
 AQUI = Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI))
 from parte import emitir  # noqa: E402
-from ledger import LARGO_HASH, leer_registros  # noqa: E402
+from correr import TIMEOUT_POR_DEFECTO, casos_previos  # noqa: E402
+from ledger import LARGO_HASH, cargar_fuentes_json, leer_registros  # noqa: E402
 from verificar_presupuesto import cargar_recibos, formatear_saldo, sumar_recibos  # noqa: E402
 from verificar_contrato import sentido_del_contrato  # noqa: E402
 
@@ -56,6 +57,13 @@ def cargar_plan(ruta):
            "cada candidato necesita un 'nombre' distinto")
     return plan
 
+def cota_de_la_ronda(plan, ids, previos):
+    """Lo máximo que la ronda puede gastar, con el mismo criterio que los recibos."""
+    k = len(plan["candidatos"])
+    return {"corridas": k, "segundos": k * plan.get("timeout", TIMEOUT_POR_DEFECTO),
+            "consultas_banco": k * len(ids), "rondas": 1,
+            "consultas_adaptativas": k * len(set(ids) & previos)}
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("plan", type=Path, help="ronda.json con la ronda completa")
@@ -91,14 +99,22 @@ def main():
                     f"{args.plan} declara analisis.sentido: {conf['sentido']}"))
         return 1
 
-    # 1. El presupuesto se consulta antes de gastar, no después.
+    # 1. El presupuesto se consulta antes de gastar, no después, y con la cota de
+    #    la ronda entera: un saldo de tres corridas no alcanza para seis candidatos.
+    digest = hashlib.sha256(contrato.read_bytes()).hexdigest()[:LARGO_HASH]
+    try:
+        cota = cota_de_la_ronda(plan, cargar_fuentes_json(fuentes), casos_previos(recibos, digest, iteracion))
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(emitir("ronda", "error", {"motivo": exc}))
+        return 2
     previo = correr([str(AQUI / "verificar_presupuesto.py"), "--recibos", str(recibos),
-                     "--presupuesto", str(presupuesto), "--ledger", str(ledger)])
+                     "--presupuesto", str(presupuesto), "--ledger", str(ledger),
+                     "--lote-json", json.dumps(cota)])
     if previo.returncode != 0:
-        print(emitir("ronda", "bloqueado", {"iteracion": iteracion, "motivo": "presupuesto"},
+        print(emitir("ronda", "bloqueado", {"iteracion": iteracion, "motivo": "presupuesto",
+                                            "cota": json.dumps(cota, separators=(",", ":"))},
                      detalle=previo.stdout.strip().replace("\n", " ")[:600]))
         return 1
-    digest = hashlib.sha256(contrato.read_bytes()).hexdigest()[:LARGO_HASH]
 
     # 2. La ronda anterior tiene que estar interpretada. El arnés escribe el dato;
     #    la vía del triage solo la puede poner el agente, y si no la puso, medir

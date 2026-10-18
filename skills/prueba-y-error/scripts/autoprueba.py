@@ -82,6 +82,7 @@ def montar(raiz, ventaja, sentido="mayor", sentido_plan=None):
         "analisis": {"metodo": "bootstrap_pareado", "semilla": "s1", "correccion": "holm",
                      "alpha": 0.05, "umbral": 0.05, "remuestreos": 2000,
                      "sentido": sentido_plan or sentido},
+        "timeout": 60.0,
         "candidatos": [
             {"nombre": "base", "hipotesis": "referencia", "prediccion": {"direccion": "base"},
              "diseno": {"pareado": True},
@@ -373,6 +374,35 @@ def prueba_diagnostico(raiz):
     hecho = correr([AQUI / "ledger.py", "check", "EXP/ledger.jsonl", "EXP/contrato.md"], raiz)
     afirmar("el ledger con diagnósticos valida", hecho.returncode == 0, hecho.stdout)
 
+def prueba_cota_ronda(raiz):
+    print("\nla ronda entera tiene que caber en el presupuesto antes de correr")
+    exp = montar(raiz, 0.09)
+    presupuesto = (exp / "presupuesto.json").read_text(encoding="utf-8")
+    for campo, limite in (("max_corridas", 1), ("max_consultas_banco", 59), ("max_segundos", 119)):
+        (exp / "presupuesto.json").write_text(json.dumps({**json.loads(presupuesto), campo: limite}), encoding="utf-8")
+        hecho = correr([AQUI / "ronda.py", "EXP/ronda.json", "--exp", "EXP", "--dry-run"], raiz)
+        afirmar(f"con {campo}={limite} dos candidatos no caben y la ronda se bloquea",
+                hecho.returncode == 1 and f"no_cabe={campo[4:]}" in hecho.stdout, hecho.stdout)
+    afirmar("bloqueada por la cota no escribe recibos", not (exp / "runs").exists())
+
+    (exp / "presupuesto.json").write_text(presupuesto, encoding="utf-8")
+    hecho = correr([AQUI / "ronda.py", "EXP/ronda.json", "--exp", "EXP"], raiz)
+    afirmar("con el presupuesto original la ronda corre", hecho.returncode == 0, hecho.stdout + hecho.stderr)
+    for candidato in ("base", "alto"):
+        diagnostico(raiz, candidato, "sigue")
+    ronda2 = json.loads((exp / "ronda.json").read_text(encoding="utf-8"))
+    ronda2["iteracion"] = 2
+    (exp / "ronda2.json").write_text(json.dumps(ronda2), encoding="utf-8")
+    (exp / "presupuesto.json").write_text(
+        json.dumps({**json.loads(presupuesto), "max_consultas_adaptativas": 59}), encoding="utf-8")
+    hecho = correr([AQUI / "ronda.py", "EXP/ronda2.json", "--exp", "EXP"], raiz)
+    afirmar("volver al mismo banco en la iteración 2 cuenta como adaptativo y no cabe en 59",
+            hecho.returncode == 1 and "no_cabe=consultas_adaptativas" in hecho.stdout, hecho.stdout)
+
+    hecho = correr([AQUI / "verificar_presupuesto.py", "--recibos", "EXP/runs", "--presupuesto",
+                    "EXP/presupuesto.json", "--lote-json", '{"corridas": 2}'], raiz)
+    afirmar("el verificador rechaza un lote sin las cinco dimensiones", hecho.returncode == 2, hecho.stdout)
+
 def prueba_otro_cwd(raiz):
     print("\nel ledger guarda rutas relativas al experimento y check las resuelve desde cualquier cwd")
     otro = raiz / "otro"
@@ -423,6 +453,8 @@ def main():
         prueba_diagnostico(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:
         prueba_sentido(Path(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        prueba_cota_ronda(Path(tmp))
     prueba_correccion_bonferroni()
     print()
     if FALLOS:

@@ -2,6 +2,12 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.11.0] - 2026-10-18
+
+### Cambiado
+
+- **`prueba-y-error`: la ronda entera tiene que caber en el presupuesto antes de correr.** `ronda.py` consultaba `verificar_presupuesto.py` antes de gastar, pero el verificador solo bloqueaba con consumido igual o mayor al límite, así que con `max_corridas: 3` y seis candidatos corría los seis y terminaba `ok`: el presupuesto frenaba la ronda siguiente, no la que estaba por gastar. Ahora `verificar_presupuesto.py` acepta `--lote-json` con la cota de lo que está por gastarse en las cinco dimensiones y bloquea con `no_cabe=` si consumido más cota supera algún límite. `ronda.py` la calcula antes de correr, también con `--dry-run`: tantas corridas como candidatos, candidatos por casos de `fuentes` en consultas al banco, candidatos por `timeout` en segundos, una ronda, y adaptativas si el banco ya se consultó en iteraciones anteriores del linaje, con el mismo criterio que usa el recibo. El timeout por defecto de `correr.py` queda en una constante que `ronda.py` comparte. Incompatible en la práctica: una `ronda.json` sin `timeout` proyecta 1800 s por candidato, y con `max_segundos` menor que eso deja de correr hasta declarar un timeout realista. La autoprueba pasa de 59 a 66 comprobaciones y su fixture declara `timeout`. Lo encontró la auditoría lateral del 2026-10-18.
+
 ## [2.10.0] - 2026-10-18
 
 ### Cambiado

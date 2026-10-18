@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from parte import emitir
 
+TIMEOUT_POR_DEFECTO = 1800.0
 
 def casos_del_crudo(ruta):
     """consultas al banco = casos distintos efectivamente observados."""
@@ -63,7 +64,7 @@ def main():
     parser.add_argument("--candidato", required=True)
     parser.add_argument("--fase", required=True)
     parser.add_argument("--hash-contrato", required=True)
-    parser.add_argument("--timeout", type=float, default=1800.0)
+    parser.add_argument("--timeout", type=float, default=TIMEOUT_POR_DEFECTO)
     parser.add_argument("comando", nargs=argparse.REMAINDER,
                         help="tras -- : el protocolo declarado en el contrato")
     args = parser.parse_args()

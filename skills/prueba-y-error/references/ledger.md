@@ -191,6 +191,13 @@ cierre; no convierte el resultado en evidencia de eficacia. La comprobación no
 reemplaza un lock externo cuando varios procesos escriben el mismo ledger: en ese
 caso se usa un solo subagente secuencial.
 
+Con `--lote-json` el verificador recibe además la cota de lo que está por
+gastarse, en las cinco dimensiones, y bloquea si consumido más cota supera
+algún límite. Es lo que hace `ronda.py` antes de correr: con `max_corridas: 3`
+y seis candidatos la ronda no arranca, en vez de correr los seis y bloquear
+recién la siguiente. La cota de segundos es candidatos por `timeout`, así que
+un timeout muy holgado bloquea rondas que cabrían.
+
 ## Criterios de parada
 
 Se declaran en el contrato, antes de empezar. Son tres y basta con uno:

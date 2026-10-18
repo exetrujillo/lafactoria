@@ -73,17 +73,33 @@ def formatear_saldo(consumido, presupuesto):
     return " ".join(f"{campo}={consumido[campo]:.6g}/{presupuesto.get(f'max_{campo}')}"
                     for campo in DIMENSIONES_COSTO)
 
+def cargar_lote(texto):
+    lote = json.loads(texto)
+    if not isinstance(lote, dict):
+        raise ValueError("--lote-json debe ser un objeto JSON")
+    for campo in DIMENSIONES_COSTO:
+        if not numero_finito(lote.get(campo)) or lote[campo] < 0:
+            raise ValueError(f"--lote-json: {campo} no es un número finito no negativo")
+    return lote
+
+def no_cabe(consumido, presupuesto, lote):
+    """Dimensiones en las que consumido + lote supera el límite."""
+    return [campo for campo in DIMENSIONES_COSTO
+            if consumido[campo] + lote[campo] > presupuesto[f"max_{campo}"]]
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--recibos", type=Path, required=True)
     parser.add_argument("--presupuesto", type=Path, required=True)
     parser.add_argument("--ledger", type=Path, help="si se pasa, concilia costos declarados vs medidos")
+    parser.add_argument("--lote-json", help="cota de lo que está por gastarse, en las cinco dimensiones")
     args = parser.parse_args()
     try:
         presupuesto = json.loads(args.presupuesto.read_text(encoding="utf-8"))
         if not isinstance(presupuesto, dict):
             raise ValueError("el presupuesto debe ser un objeto JSON")
         recibos = cargar_recibos(args.recibos) if args.recibos.exists() else []
+        lote = cargar_lote(args.lote_json) if args.lote_json else None
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(emitir("presupuesto", "error", {"motivo": exc}))
         return 2
@@ -116,6 +132,15 @@ def main():
     if agotadas:
         campos["agotado"] = ",".join(agotadas)
         print(emitir("presupuesto", "bloqueado", campos))
+        return 1
+    # El lote se mide contra el saldo antes de gastarlo: lo que no cabe entero
+    # no arranca, en vez de correr y bloquear recién la ronda siguiente.
+    excedidas = no_cabe(consumido, presupuesto, lote) if lote else []
+    if excedidas:
+        campos["no_cabe"] = ",".join(excedidas)
+        print(emitir("presupuesto", "bloqueado", campos, detalle="; ".join(
+            f"{campo}: {consumido[campo]:.6g}+{lote[campo]:.6g} > {presupuesto[f'max_{campo}']}"
+            for campo in excedidas)))
         return 1
     print(emitir("presupuesto", "ok", campos))
     return 0
