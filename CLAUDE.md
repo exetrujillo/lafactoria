@@ -30,7 +30,7 @@ cargo run --quiet -- install NOMBRE --descartar-vivencias  # borrarlo de la copi
 cargo run --quiet -- install NOMBRE --destino DIR  # instalar en DIR/.claude/skills (otro proyecto)
 cargo run --quiet -- instalaciones [NOMBRE]  # copias registradas y si están al día con su fuente
 cargo run --quiet -- refrescar NOMBRE|--todas  # reinstalar las copias registradas desactualizadas
-cargo test --quiet                           # tests unitarios del parser de frontmatter
+cargo test --quiet                           # tests unitarios de skillcheck
 ```
 
 `lint` termina con exit code `1` si hay algún `error:`. `install` corre `lint`
@@ -43,8 +43,7 @@ registrada con su fuente (`al_dia`, `desactualizada`, `no_existe`) y
 `refrescar` reinstala las desactualizadas en el mismo lugar, con la misma
 validación que `install`. Con `--destino`, además, `install` agrega al
 `.git/info/exclude` del proyecto de destino (local, no versionado) la copia
-entera si la skill es personal, o solo sus `vivencias/` y su
-`.factoria-origen` si es pública.
+entera si la skill es personal, o solo su `.factoria-origen` si es pública.
 
 ## Arquitectura
 
@@ -77,6 +76,17 @@ entera si la skill es personal, o solo sus `vivencias/` y su
   instrucción resolvería `vivencias/` contra ella en vez de contra la fuente.
   `lint_skill` no la corre sobre una skill enlazada (`es_enlace`), que nunca
   tiene copia y cuyo SKILL.md versiona otro proyecto.
+- `check_vivencias_validador` cuida que las dos mitades del contrato de
+  vivencias vayan juntas, mirando archivos y no el cuerpo. Da error si
+  `vivencias/ajustes.json` declara alguna clave dentro de `ajustes` y no existe
+  `scripts/validar_ajustes.rs` (con `ajustes: {}` no exige validador), y
+  también si existe el validador y el directorio `vivencias/` pero no
+  `vivencias/ajustes.json`, porque entonces el gate de `install` nunca corre.
+  Sin `vivencias/` (clon fresco) calla. Lee `ajustes` con `json_object` del
+  mismo `src/json_util.rs` que copian las skills, incluido una sola vez en
+  `mod json_util` para el binario y sus tests; si el archivo no se puede
+  parsear, también calla: eso lo dirá el validador. Exenta para las skills
+  enlazadas, igual que `check_origen_vivencias`.
 - `check_tmp_fijo` da error si el cuerpo contiene `/tmp/`. En un `/tmp`
   compartido otra persona puede crear antes una ruta fija, y un comando que
   compila ahí y en la línea siguiente ejecuta corre su archivo. Las skills
@@ -104,8 +114,16 @@ entera si la skill es personal, o solo sus `vivencias/` y su
 - `copy_dir_recursive` + `run_install` implementan `skillcheck install`: validan
   la skill, y copian (no symlink) su directorio completo a
   `.claude/skills/<nombre>` (proyecto) o `$HOME/.claude/skills/<nombre>`
-  (`--global`), reemplazando el destino si ya existe. Después de copiar,
+  (`--global`), reemplazando el destino si ya existe. La copia no lleva
+  `vivencias/` (a cualquier profundidad, igual que `__pycache__`): la skill
+  las lee y escribe en la fuente vía `.factoria-origen`. Después de copiar,
   `directories_equal` compara ambos árboles byte a byte y aborta si difieren.
+  Esa comparación ignora `vivencias/` solo del lado de la fuente, a propósito:
+  una copia vieja que todavía la trae sale `desactualizada` en
+  `instalaciones` y `refrescar` la deja limpia. `archivos_solo_en_destino`
+  sigue mirando la copia entera, así que `--adoptar-vivencias` y
+  `--descartar-vivencias` quedan como red para lo que una skill haya escrito
+  en la copia por error.
 - Antes de copiar, `validate_vivencias` corre el gate de vivencias: si la
   fuente tiene tanto `scripts/validar_ajustes.rs` como `vivencias/ajustes.json`,
   los compila con `rustc -O` a un binario temporal y lo ejecuta contra ese
@@ -119,8 +137,8 @@ entera si la skill es personal, o solo sus `vivencias/` y su
   tanto la skill sin validador propio como un clon fresco sin `vivencias/`
   todavía (no está versionada).
 - Terminada esa verificación, `run_install` escribe `.factoria-origen` en la
-  copia instalada (para qué sirve este marcador, ver "Memoria" en el
-  README). **Se escribe después de `directories_equal` a propósito**:
+  copia instalada (para qué sirve este marcador, ver "Dónde se escribe",
+  dentro de "Vivencias", en el README). **Se escribe después de `directories_equal` a propósito**:
   escribirlo antes hace fallar la comparación de árboles. Está en
   `.gitignore` porque contiene una ruta local.
 - Una entrada de una raíz puede ser un enlace a la skill que versiona otro

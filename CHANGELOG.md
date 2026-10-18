@@ -2,6 +2,22 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.8.0] - 2026-10-18
+
+### Agregado
+
+- **`lint` exige que las dos mitades del contrato de vivencias vayan juntas.** Si `vivencias/ajustes.json` declara claves en `ajustes` y la skill no tiene `scripts/validar_ajustes.rs`, error: sin validador, `install` instala cualquier `ajustes.json`. Si existe el validador y `vivencias/` pero falta `ajustes.json`, error: el gate de `install` nunca corre. Era el caso de `chatarrero` y `la-quinta-pata`. Con `ajustes: {}` no exige validador, como manda `forjador`, y sin `vivencias/` (clon fresco) calla. Mira archivos, no el texto del SKILL.md, y exime a las skills enlazadas. `forjador` y `CLAUDE.md` la documentan.
+- Convención de procedencia al promover una vivencia a `references/`: la línea del `INDICE.md` se marca como promovida nombrando la referencia, y la referencia lleva una línea con el archivo de `registro/` de origen. Sin eso la poda que pide el README no podía saber qué ya se había promovido. Es una convención al escribir, documentada en el README y en `forjador`, sin skill dueña del ciclo.
+
+### Cambiado
+
+- **`install` ya no copia `vivencias/` a la copia instalada.** Desde 2.3.0 las skills leen y escriben las vivencias en la fuente vía `.factoria-origen`, y la copia solo servía como respaldo de lectura cuando el marcador apuntaba a una ruta inexistente. Ese respaldo propagaba datos locales a cada copia, y se filtraría con un `~/.claude/` versionado en dotfiles. Ahora la copia no la lleva; si el marcador apunta a una ruta que ya no existe, la skill sigue sin vivencias y pide reinstalar. Los ocho SKILL.md con vivencias dicen lo mismo. `directories_equal` ignora `vivencias/` solo del lado de la fuente, así que una copia vieja que todavía la trae sale `desactualizada` y `refrescar` la deja limpia, y escribir una vivencia en la fuente ya no desactualiza las copias. `--destino` en una skill pública excluye solo `.factoria-origen`. Las flags `--adoptar-vivencias` y `--descartar-vivencias` siguen como red para lo que una skill haya escrito en la copia por error.
+
+### Corregido
+
+- `prueba-y-error`: el ledger guarda `crudo` y `analisis.ruta` relativas al directorio del experimento y `check` las resuelve contra él. Antes guardaba las rutas tal como llegaron por línea de comandos y `check` las resolvía contra el directorio actual, así que desde otro directorio un crudo que existía salía como borrado. `references/ledger.md` ya mostraba el formato relativo; ahora el código lo produce. La autoprueba cubre `--exp` relativo y absoluto con `check` desde otro directorio.
+- `chatarrero`: el esqueleto de `references/captcha-manual.md` escribe el archivo de sesión (cookies y User-Agent) con permisos 600. Lo creaba con los permisos por defecto, legible para cualquiera con acceso al directorio, aunque el mismo texto lo declara secreto. Lo encontró la auditoría lateral de hoy.
+
 ## [2.7.0] - 2026-10-15
 
 ### Agregado

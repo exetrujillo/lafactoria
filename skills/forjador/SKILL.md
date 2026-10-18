@@ -152,6 +152,12 @@ error de orden de identificadores que costó dos rondas descartadas y volvió a
 aparecer al día siguiente con la entrada ya escrita. Copia el párrafo "Al
 comenzar, lee `vivencias/INDICE.md`" de cualquiera de las skills del repo.
 
+Cuando un hallazgo de `vivencias/registro/` se confirma y pasa a
+`references/`, deja la procedencia en los dos lados: la línea del `INDICE.md`
+se marca como promovida nombrando la referencia destino, y la referencia lleva
+una línea con el archivo de `registro/` del que salió. Así la poda sabe qué ya
+se promovió, y si los dos textos difieren manda la referencia.
+
 La sección "Vivencias propias" abre con el párrafo "Dónde están las
 vivencias", copiado tal cual de cualquiera de las seis skills: le indica al
 agente que resuelva `vivencias/` contra la fuente que marca `.factoria-origen`
@@ -174,7 +180,7 @@ lo rechaza.
 
 No reescribas a mano el lector de JSON: copia `src/json_util.rs` tal cual al
 `scripts/` de la skill nueva y agrégale un `include!("json_util.rs");` al
-`validar_ajustes.rs` (mismo patrón en las seis skills existentes con
+`validar_ajustes.rs` (mismo patrón en las siete skills existentes con
 validador). Es una copia deliberada, no un módulo compartido vía `use`: cada
 skill viaja sola cuando se instala `--global` en otro proyecto, y su
 `validar_ajustes.rs` se compila suelto con `rustc` sin `Cargo.toml`, así que
@@ -250,8 +256,9 @@ entero de una vez, que además es una sola corrida.
 
 Corrige todos los `error:` antes de mostrarle nada al usuario. Si la skill
 tiene validador de vivencias (paso 3), corre también ese script contra su
-`ajustes.json` — `skillcheck lint` no lo conoce todavía, así que es una
-corrida aparte.
+`ajustes.json`. `lint` comprueba que el validador exista cuando el cuerpo
+declara claves, pero no lo corre; quien lo corre es `install`, así que acá
+es una corrida aparte.
 
 ## 5. Auditar la lógica (condicional)
 
@@ -327,7 +334,7 @@ recién creada, porque lo que se aprendió es sobre forjar.
 su única línea es la ruta absoluta de la fuente, y `vivencias/` se lee y se
 escribe en `<fuente>/vivencias/`, nunca en la copia. Sin marcador, este
 directorio es la fuente. Si el marcador apunta a una ruta que ya no existe,
-lee `vivencias/` de la copia sin escribir nada y avísale al usuario que
+sigue sin vivencias (no leas ni escribas ninguna) y avísale al usuario que
 reinstale la skill desde donde esté ahora su fuente.
 
 Al comenzar, lee `vivencias/INDICE.md`, que tiene una línea por cada
@@ -382,6 +389,12 @@ contenido de negocio.
   directorio: sin esa instrucción, la skill instalada escribe sus vivencias en
   la copia y no en la fuente. Las skills enlazadas quedan exentas porque nunca
   tienen copia.
+- Si `vivencias/ajustes.json` declara claves en `ajustes` (un objeto no
+  vacío), tiene que existir `scripts/validar_ajustes.rs`. Y al revés: si
+  existe el validador y existe `vivencias/`, tiene que existir
+  `ajustes.json`. Sin `vivencias/` no se comprueba nada, porque un clon
+  fresco no la tiene. `lint` solo exige que el validador exista; quien lo
+  corre es `install`. Las skills enlazadas quedan exentas.
 - El cuerpo no puede nombrar una ruta fija dentro de `/tmp`. Binarios y
   archivos intermedios van a un directorio de `mktemp -d` que se borra al
   terminar. Esta regla sí alcanza a las skills enlazadas.

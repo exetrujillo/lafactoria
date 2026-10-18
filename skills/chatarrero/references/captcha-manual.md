@@ -47,8 +47,8 @@ peticiones, o el costo para el usuario no se sostiene.
    formulario y estar ya resuelta; lo que decide es el contenido. Si se cumple
    el techo, pregunta al usuario si sigue; no reintentes solo.
 5. **Exportar la sesión**: las cookies y el **User-Agent exacto** del
-   navegador, como una unidad, a un archivo fuera de git. Son secretos de
-   sesión: nunca van al crudo, al log ni a la bitácora.
+   navegador, como una unidad, a un archivo fuera de git y con permisos 600.
+   Son secretos de sesión: nunca van al crudo, al log ni a la bitácora.
 6. **Seguir el lote**, de una de dos maneras:
    - en el mismo navegador, si son pocos ítems o el sitio revalida en cada
      página;
@@ -65,7 +65,7 @@ no por ítem. La cortesía no cambia con la sesión resuelta: las pausas de
 ## Esqueleto con `nodriver`
 
 ```python
-import json, os, pathlib, time
+import json, os, time
 import nodriver as uc
 
 async def sesion_manual(url, selector_listo, perfil, salida, techo_s=300):
@@ -85,11 +85,13 @@ async def sesion_manual(url, selector_listo, perfil, salida, techo_s=300):
         raise SystemExit("techo cumplido sin contenido: preguntar antes de seguir")
     ua = await tab.evaluate("navigator.userAgent", return_by_value=True)
     cookies = await browser.cookies.get_all()
-    pathlib.Path(salida).write_text(json.dumps({
+    sesion = json.dumps({
         "user_agent": ua,
         "cookies": [{"name": c.name, "value": c.value, "domain": c.domain, "path": c.path}
                     for c in cookies],
-    }))
+    })
+    with os.fdopen(os.open(salida, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+        f.write(sesion)
     return browser, tab
 
 # uc.loop().run_until_complete(sesion_manual(...)), como indica el README de nodriver

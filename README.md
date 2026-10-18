@@ -358,14 +358,20 @@ Esa es la diferencia entre las dos cosas que hoy conviven en `references/`: las
 ciclo de promoción, lo versionado deja de ser lo que midió una persona y pasa a
 ser lo que sobrevivió a la prueba de servirle a otro.
 
+La promoción deja su procedencia en los dos lados: la línea del `INDICE.md`
+se marca como promovida nombrando la referencia destino, y la referencia lleva
+una línea con el archivo de `registro/` del que salió. Así la poda sabe qué ya
+se promovió, y si los dos textos difieren manda la referencia. No hay un paso
+del ciclo ni una skill que lo haga por uno: es una convención al escribir.
+
 ### Dónde se escribe
 
 La copia instalada en `.claude/skills/<nombre>/` es la que los agentes leen, pero
 `install` la reemplaza entera en cada corrida: lo que se escriba ahí se pierde.
 **Las vivencias se escriben siempre en la fuente**, en el `vivencias/` de la
 raíz desde la que se instaló la skill —`skills/<nombre>/` o
-`priv-skills/<nombre>/`, que es lo que `.factoria-origen` apunta—, y `install`
-las propaga a la copia.
+`priv-skills/<nombre>/`, que es lo que `.factoria-origen` apunta—. `install`
+no las copia: la copia instalada no tiene `vivencias/`.
 
 Para que una skill instalada sepa volver a su fuente —sobre todo si se instaló
 con `--global` y se la usa desde otro proyecto— `skillcheck install` deja en la
@@ -377,24 +383,24 @@ Por eso cada `SKILL.md` que usa `vivencias/` abre su sección "Vivencias
 propias" indicando que toda ruta `vivencias/` se resuelve contra esa fuente,
 tanto para leer como para escribir, y `lint` rechaza la skill que no lo diga.
 Si el marcador apunta a una ruta que ya no existe (el repo se movió o se
-renombró), la skill lee las vivencias de la copia, no escribe nada y pide
+renombró), la skill sigue sin vivencias, no lee ni escribe ninguna, y pide
 reinstalar. Así nunca escribe en la copia, que `install` reemplaza.
 
 La relación inversa la guarda `instalaciones.tsv`, en la raíz del repo y fuera
 de git: cada `install` anota ahí dónde dejó la copia, y `skillcheck
 instalaciones` / `skillcheck refrescar` la usan para mostrar qué copias quedaron
 atrás de su fuente y reinstalarlas donde estaban. El registro es central y no
-vive en `vivencias/` de cada skill porque `install` copia `vivencias/` a cada
-destino: un registro ahí esparciría las rutas absolutas de esta máquina por
-todos los proyectos donde la skill esté instalada.
+vive en `vivencias/` de cada skill: `vivencias/` es de la skill y el registro
+es del repo, y las rutas absolutas de esta máquina no tienen por qué viajar
+con la skill.
 
 `install --destino DIR` instala en el `.claude/skills` de otro proyecto. Si ese
 proyecto es un repositorio git, `install` agrega a su `.git/info/exclude` —local
 a la máquina, a diferencia del `.gitignore`, que es del equipo del proyecto— la
-copia entera cuando la skill es personal, y solo `vivencias/` y
-`.factoria-origen` cuando es pública. Es el principio 2 aplicado al destino: lo
-que no sale de esta máquina desde `priv-skills/` tampoco debe salir por la
-puerta de atrás del repo donde se instaló.
+copia entera cuando la skill es personal, y solo `.factoria-origen` cuando es
+pública. Es el principio 2 aplicado al destino: lo que no sale de esta máquina
+desde `priv-skills/` tampoco debe salir por la puerta de atrás del repo donde
+se instaló.
 
 ## Instalación
 

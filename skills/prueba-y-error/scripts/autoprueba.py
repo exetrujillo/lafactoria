@@ -276,6 +276,23 @@ def prueba_diagnostico(raiz):
     hecho = correr([AQUI / "ledger.py", "check", "EXP/ledger.jsonl", "EXP/contrato.md"], raiz)
     afirmar("el ledger con diagnósticos valida", hecho.returncode == 0, hecho.stdout)
 
+def prueba_otro_cwd(raiz):
+    print("\nel ledger guarda rutas relativas al experimento y check las resuelve desde cualquier cwd")
+    otro = raiz / "otro"
+    otro.mkdir(parents=True)
+    for etiqueta, forma in (("relativo", lambda exp: "EXP"), ("absoluto", lambda exp: str(exp))):
+        exp = montar(raiz / etiqueta, 0.09)
+        hecho = correr([AQUI / "ronda.py", "EXP/ronda.json", "--exp", forma(exp)], exp.parent)
+        afirmar(f"la ronda con --exp {etiqueta} termina bien", hecho.returncode == 0, hecho.stdout + hecho.stderr)
+        registros = [json.loads(l) for l in (exp / "ledger.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+        resultado = next(r for r in registros if r.get("tipo") == "resultado")
+        afirmar(f"con --exp {etiqueta} el crudo queda relativo al experimento",
+                resultado["crudo"] == f"crudos/{resultado['run_id']}.jsonl", resultado["crudo"])
+        afirmar(f"con --exp {etiqueta} el análisis queda relativo al experimento",
+                resultado["analisis"]["ruta"] == "analisis/it1.json", resultado["analisis"]["ruta"])
+        hecho = correr([AQUI / "ledger.py", "check", exp / "ledger.jsonl", exp / "contrato.md"], otro)
+        afirmar(f"con --exp {etiqueta} check valida desde otro cwd", hecho.returncode == 0, hecho.stdout)
+
 def prueba_contrato(raiz):
     print("\ncontrato: campos ejecutables, no prosa")
     (raiz / "c.md").write_text(CONTRATO, encoding="utf-8")
@@ -297,6 +314,7 @@ def main():
         prueba_veredictos(raiz)
         prueba_strict(raiz)
         prueba_contrato(raiz)
+        prueba_otro_cwd(raiz / "cwd")
     with tempfile.TemporaryDirectory() as tmp:
         prueba_nulo(Path(tmp))
     with tempfile.TemporaryDirectory() as tmp:

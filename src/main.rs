@@ -166,6 +166,30 @@ fn check_origen_vivencias(body: &str, skill: &str, report: &mut Report) {
     }
 }
 
+/// Las dos mitades del contrato de vivencias (ver "Vivencias" en el README)
+/// van juntas: quien declara claves en `ajustes.json` tiene que validarlas, y
+/// un validador sin `ajustes.json` al lado nunca corre en `install`. Un
+/// `ajustes.json` ilegible o roto no es asunto de `lint`: lo dirá el validador.
+fn check_vivencias_validador(skill_dir: &Path, skill: &str, report: &mut Report) {
+    let validador = skill_dir.join("scripts").join("validar_ajustes.rs").is_file();
+    let vivencias = skill_dir.join("vivencias");
+    let ajustes = vivencias.join("ajustes.json");
+    if ajustes.is_file() {
+        let Ok(contenido) = fs::read_to_string(&ajustes) else { return };
+        if json_util::ajustes_declara_claves(&contenido) == Some(true) && !validador {
+            report.error(
+                skill,
+                "declara claves en vivencias/ajustes.json y no tiene scripts/validar_ajustes.rs; sin validador, `install` instala cualquier ajustes.json aunque esté mal formado",
+            );
+        }
+    } else if validador && vivencias.is_dir() {
+        report.error(
+            skill,
+            "tiene scripts/validar_ajustes.rs y vivencias/ sin ajustes.json; el gate de `install` no corre hasta que exista ese archivo",
+        );
+    }
+}
+
 fn check_tmp_fijo(body: &str, skill: &str, report: &mut Report) {
     if body.contains("/tmp/") {
         report.error(
@@ -247,9 +271,11 @@ fn lint_skill(skill_dir: &Path, seen_names: &mut Vec<(String, String)>, report: 
         check_referenced_paths(skill_dir, body, &dir_name, report);
         check_tmp_fijo(body, &dir_name, report);
         // Una skill enlazada nunca tiene copia instalada, y su SKILL.md lo
-        // versiona otro proyecto: exigirle el marcador no protege nada.
+        // versiona otro proyecto: exigirle el marcador no protege nada, y el
+        // contrato de vivencias lo hace cumplir el `install` de ese proyecto.
         if !es_enlace(skill_dir) {
             check_origen_vivencias(body, &dir_name, report);
+            check_vivencias_validador(skill_dir, &dir_name, report);
         }
     }
 
@@ -358,7 +384,8 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
-        if entry.file_name() == "__pycache__" {
+        // La copia no lleva vivencias: la skill las lee y escribe en la fuente.
+        if entry.file_name() == "__pycache__" || entry.file_name() == "vivencias" {
             continue;
         }
         let dest_path = dst.join(entry.file_name());
@@ -408,12 +435,19 @@ fn archivos_solo_en_destino(source: &Path, dest: &Path) -> std::io::Result<Vec<P
 fn directories_equal(src: &Path, dst: &Path) -> std::io::Result<bool> {
     // `__pycache__` es regenerable y `.factoria-origen` lo escribe `install`
     // después de copiar: ninguno de los dos distingue una copia al día de una
-    // desactualizada, así que se ignoran de los dos lados.
+    // desactualizada, así que se ignoran de los dos lados. `vivencias/` se
+    // ignora solo en la fuente: `install` no la copia, y una copia vieja que
+    // todavía la trae tiene que salir desactualizada para que `refrescar` la
+    // deje limpia.
     let relevante = |entry: &fs::DirEntry| {
         let nombre = entry.file_name();
         nombre != "__pycache__" && nombre != ".factoria-origen"
     };
-    let mut src_entries: Vec<_> = fs::read_dir(src)?.filter_map(Result::ok).filter(relevante).collect();
+    let mut src_entries: Vec<_> = fs::read_dir(src)?
+        .filter_map(Result::ok)
+        .filter(relevante)
+        .filter(|entry| entry.file_name() != "vivencias")
+        .collect();
     let mut dst_entries: Vec<_> = fs::read_dir(dst)?.filter_map(Result::ok).filter(relevante).collect();
     src_entries.sort_by_key(|entry| entry.file_name());
     dst_entries.sort_by_key(|entry| entry.file_name());
@@ -570,9 +604,9 @@ fn elegir_solo_en_copia(adoptar: bool, descartar: bool, uso: &str) -> SoloEnCopi
 // copia. Existe para responder la pregunta inversa a `.factoria-origen`: la
 // copia sabe cuál es su fuente, pero hasta ahora la fuente no sabía dónde
 // tenía copias, y editar la fuente sin reinstalar es el error más frecuente
-// del repo. Vive en la raíz, fuera de git, y no dentro de `vivencias/` de cada
-// skill: `install` copia `vivencias/` a cada destino, así que un registro ahí
-// esparciría las rutas absolutas de esta máquina por todos los proyectos.
+// del repo. Vive en la raíz, fuera de git, y no repartido en `vivencias/` de
+// cada skill: `instalaciones` y `refrescar --todas` recorren todas las copias
+// de una vez, y una sola tabla lo resuelve sin abrir cada skill.
 const REGISTRO_INSTALACIONES: &str = "instalaciones.tsv";
 
 fn leer_registro(registro: &Path) -> Vec<(String, PathBuf)> {
@@ -617,8 +651,8 @@ fn estado_copia(fuente: &Path, copia: &Path) -> &'static str {
 /// Usa `.git/info/exclude`, que es local a la máquina, y no el `.gitignore`
 /// del proyecto: ese archivo es del equipo que lo mantiene y `skillcheck` no
 /// tiene por qué tocarlo. Una skill personal se excluye entera, porque
-/// `priv-skills/` nunca sale de la máquina; de una pública se excluyen solo
-/// sus vivencias y el marcador con la ruta absoluta de la fuente.
+/// `priv-skills/` nunca sale de la máquina; de una pública se excluye solo
+/// el marcador con la ruta absoluta de la fuente.
 fn excluir_de_git(proyecto: &Path, name: &str, personal: bool) -> std::io::Result<Vec<String>> {
     let git = proyecto.join(".git");
     if !git.is_dir() {
@@ -627,10 +661,7 @@ fn excluir_de_git(proyecto: &Path, name: &str, personal: bool) -> std::io::Resul
     let patrones: Vec<String> = if personal {
         vec![format!("/.claude/skills/{name}/")]
     } else {
-        vec![
-            format!("/.claude/skills/{name}/vivencias/"),
-            format!("/.claude/skills/{name}/.factoria-origen"),
-        ]
+        vec![format!("/.claude/skills/{name}/.factoria-origen")]
     };
     let exclude = git.join("info").join("exclude");
     let actual = fs::read_to_string(&exclude).unwrap_or_default();
@@ -807,8 +838,8 @@ fn run_install(name: &str, destino: Destino, solo_en_copia: SoloEnCopia) {
 
     // La copia instalada es la que leen los agentes, pero `install` la reemplaza
     // entera en cada corrida. Dejar acá la ruta de la fuente permite que una skill
-    // escriba su memoria en `skills/<nombre>/memoria/`, que sí sobrevive, en vez de
-    // en esta copia, que es efímera. Se escribe después de `directories_equal` para
+    // escriba sus vivencias en `skills/<nombre>/vivencias/`, que sí sobrevive, en vez
+    // de en esta copia, que es efímera. Se escribe después de `directories_equal` para
     // no romper la verificación de que la copia es idéntica a la fuente.
     let origen = fs::canonicalize(&source).unwrap_or_else(|_| source.clone());
     let marcador = dest.join(".factoria-origen");
@@ -1066,6 +1097,57 @@ mod tests {
     }
 
     #[test]
+    fn el_contrato_de_vivencias_exige_validador_y_ajustes_juntos() {
+        let raiz = arbol_temporal("contrato-vivencias");
+        let skill_md = |n: &str| format!("---\nname: {n}\ndescription: y\n---\n\nCuerpo.\n");
+        let con_claves = r#"{"ajustes": {"tono": "neutro"}}"#;
+        escribir(&raiz, "skills/claves/SKILL.md", &skill_md("claves"));
+        escribir(&raiz, "skills/claves/vivencias/ajustes.json", con_claves);
+        escribir(&raiz, "skills/vacia/SKILL.md", &skill_md("vacia"));
+        escribir(&raiz, "skills/vacia/vivencias/ajustes.json", r#"{"ajustes": {}}"#);
+        escribir(&raiz, "skills/huerfano/SKILL.md", &skill_md("huerfano"));
+        escribir(&raiz, "skills/huerfano/scripts/validar_ajustes.rs", "fn main() {}");
+        escribir(&raiz, "skills/huerfano/vivencias/INDICE.md", "");
+        escribir(&raiz, "skills/fresca/SKILL.md", &skill_md("fresca"));
+        escribir(&raiz, "skills/fresca/scripts/validar_ajustes.rs", "fn main() {}");
+        let real = raiz.join("proyecto/.claude/skills/ajena");
+        escribir(&real, "SKILL.md", &skill_md("ajena"));
+        escribir(&real, "vivencias/ajustes.json", con_claves);
+        let priv_skills = raiz.join("priv-skills");
+        fs::create_dir_all(&priv_skills).unwrap();
+        std::os::unix::fs::symlink(&real, priv_skills.join("ajena")).unwrap();
+
+        let report = lint_all(&[raiz.join("skills"), priv_skills]);
+
+        assert_eq!(report.errors.len(), 2, "{:?}", report.errors);
+        assert!(report.errors.iter().any(|e| e.starts_with("[claves]") && e.contains("no tiene scripts/validar_ajustes.rs")),
+            "claves sin validador: {:?}", report.errors);
+        assert!(report.errors.iter().any(|e| e.starts_with("[huerfano]") && e.contains("sin ajustes.json")),
+            "validador con vivencias/ y sin ajustes.json: {:?}", report.errors);
+        fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
+    fn la_copia_no_lleva_vivencias_y_la_comparacion_lo_sabe() {
+        let raiz = arbol_temporal("vivencias-asimetria");
+        let fuente = raiz.join("fuente");
+        let copia = raiz.join("copia");
+        escribir(&fuente, "SKILL.md", "a");
+        escribir(&fuente, "vivencias/INDICE.md", "indice");
+        escribir(&fuente, "scripts/vivencias/anidada.md", "a cualquier profundidad");
+        copy_dir_recursive(&fuente, &copia).unwrap();
+
+        assert!(!copia.join("vivencias").exists() && !copia.join("scripts/vivencias").exists());
+        assert!(directories_equal(&fuente, &copia).unwrap(), "la fuente con vivencias/ y la copia sin ellas son iguales");
+        escribir(&copia, "vivencias/INDICE.md", "indice");
+        assert!(!directories_equal(&fuente, &copia).unwrap(), "una copia vieja que trae vivencias/ sale desactualizada");
+        fs::remove_dir_all(copia.join("vivencias")).unwrap();
+        escribir(&copia, "SKILL.md", "b");
+        assert!(!directories_equal(&fuente, &copia).unwrap());
+        fs::remove_dir_all(&raiz).unwrap();
+    }
+
+    #[test]
     fn detecta_vivencias_que_solo_viven_en_la_copia_instalada() {
         let raiz = arbol_temporal("vivencias");
         let source = raiz.join("source");
@@ -1133,7 +1215,8 @@ mod tests {
         let raiz = arbol_temporal("exclude");
         fs::create_dir_all(raiz.join(".git")).unwrap();
         let publica = excluir_de_git(&raiz, "demo", false).unwrap();
-        assert_eq!(publica, vec!["/.claude/skills/demo/vivencias/", "/.claude/skills/demo/.factoria-origen"]);
+        assert_eq!(publica, vec!["/.claude/skills/demo/.factoria-origen"],
+            "la copia no lleva vivencias/, así que solo se excluye el marcador");
         assert!(excluir_de_git(&raiz, "demo", false).unwrap().is_empty(), "no repite patrones");
         assert_eq!(excluir_de_git(&raiz, "mia", true).unwrap(), vec!["/.claude/skills/mia/"],
             "una skill personal se excluye entera");
@@ -1199,10 +1282,31 @@ mod tests {
         assert!(!is_opencode_name("dos--guiones"));
         assert!(!is_opencode_name("-invalido"));
     }
+}
 
-    mod json_util {
-        #![allow(dead_code)]
-        include!("json_util.rs");
+// La misma copia canónica que las skills llevan en scripts/, incluida una sola
+// vez: el binario la usa para leer `ajustes` y los tests de abajo la ejercitan.
+mod json_util {
+    #![allow(dead_code)]
+    include!("json_util.rs");
+
+    /// `None` si no hay objeto `ajustes` legible; `Some(true)` si tiene al
+    /// menos una clave, que en JSON va siempre entre comillas.
+    pub(super) fn ajustes_declara_claves(contenido: &str) -> Option<bool> {
+        json_object(contenido, "ajustes").map(|objeto| objeto.contains('"'))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn un_objeto_ajustes_vacio_no_declara_claves() {
+            assert_eq!(ajustes_declara_claves(r#"{"ajustes": {}, "notas": ["x"]}"#), Some(false));
+            assert_eq!(ajustes_declara_claves("{\"ajustes\": {\n  \n}}"), Some(false));
+            assert_eq!(ajustes_declara_claves(r#"{"ajustes": {"tono": "neutro"}}"#), Some(true));
+            assert_eq!(ajustes_declara_claves(r#"{"notas": []}"#), None);
+        }
 
         #[test]
         fn un_corchete_dentro_de_un_string_no_corta_el_arreglo() {

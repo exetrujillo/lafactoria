@@ -306,7 +306,7 @@ respuestas.
 su única línea es la ruta absoluta de la fuente, y `vivencias/` se lee y se
 escribe en `<fuente>/vivencias/`, nunca en la copia. Sin marcador, este
 directorio es la fuente. Si el marcador apunta a una ruta que ya no existe,
-lee `vivencias/` de la copia sin escribir nada y avísale al usuario que
+sigue sin vivencias (no leas ni escribas ninguna) y avísale al usuario que
 reinstale la skill desde donde esté ahora su fuente.
 
 Al comenzar, lee `vivencias/INDICE.md`, que tiene una línea por cada

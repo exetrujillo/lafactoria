@@ -56,10 +56,10 @@ Un objeto JSON por línea, sin saltos internos.
 | `test_declarado` | `plan` | el test y su umbral, fijados antes de ver nada |
 | `decision_si_falla` | `plan` | qué pasa si la predicción no se cumple, decidido de antemano |
 | `regla` | `plan` | qué regla de la política decidirá quién sobrevive, fijada antes de correr |
-| `crudo`, `sha256_crudo` | `resultado` | ruta a la salida sin interpretar y su hash: si el crudo cambia o se borra, `check` lo detecta |
+| `crudo`, `sha256_crudo` | `resultado` | ruta a la salida sin interpretar, relativa al directorio del experimento, y su hash: si el crudo cambia o se borra, `check` lo detecta |
 | `run_id` | `resultado` | el recibo de `correr.py` que respalda el costo |
 | `metrica` | `resultado` | valor, **intervalo** y n. Un valor sin intervalo no sirve |
-| `analisis` | `resultado` | método, corrección, alfa, semilla y ruta del análisis que produjo la métrica |
+| `analisis` | `resultado` | método, corrección, alfa, semilla y ruta del análisis que produjo la métrica, relativa al directorio del experimento |
 | `test_aplicado` | `resultado` | debe coincidir con `test_declarado`. Si no coincide, la línea es inválida |
 | `veredicto` | `diagnostico` | cumplida o fallida, con el número |
 | `triage` | `diagnostico` | solo si falló: vía 1, 2 o 3, con justificación |
@@ -92,19 +92,24 @@ se congela otro contrato y se abre otro linaje.
 La interfaz de escritura es deliberadamente pequeña:
 
 ```sh
-python3 scripts/ledger.py plan LEDGER --contrato CONTRATO \
+python3 scripts/ledger.py plan EXP/ledger.jsonl --contrato EXP/contrato.md \
   --fase A --iteracion 1 --candidato nombre --hipotesis '...' \
   --prediccion-json PREDICCION.json --diseno-json DISENO.json \
   --test-declarado '...' --decision-si-falla '...' --fuentes-json FUENTES.json \
   --regla halving
-python3 scripts/ledger.py resultado LEDGER --contrato CONTRATO \
+python3 scripts/ledger.py resultado EXP/ledger.jsonl --contrato EXP/contrato.md \
   --fase A --iteracion 1 --candidato nombre \
-  --recibo runs/it1-nombre.json --analisis analisis/it1.json --test-aplicado '...'
-python3 scripts/ledger.py diagnostico LEDGER --contrato CONTRATO \
+  --recibo EXP/runs/it1-nombre.json --analisis EXP/analisis/it1.json --test-aplicado '...'
+python3 scripts/ledger.py diagnostico EXP/ledger.jsonl --contrato EXP/contrato.md \
   --iteracion 1 --candidato nombre --veredicto '...' --decision muere \
   --via 3 --justificacion '...'
-python3 scripts/ledger.py check LEDGER CONTRATO
+python3 scripts/ledger.py check EXP/ledger.jsonl EXP/contrato.md
 ```
+
+`EXP` es el directorio del experimento, relativo al cwd o absoluto, como en el
+SKILL.md. `--recibo` y `--analisis` se resuelven contra el cwd de la llamada;
+el ledger guarda `crudo` y `analisis.ruta` relativas a `EXP`, que es donde
+`check` las busca, así que se puede correr desde cualquier directorio.
 
 El `resultado` no recibe ninguna cifra: las saca del recibo de `correr.py` y del
 análisis de `analizar.py`, y falla si el recibo no corresponde a ese candidato o

@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -100,12 +101,16 @@ def armar_resultado(args):
     metric = analysis.get("metricas", {}).get(args.candidato)
     if not isinstance(metric, dict):
         raise ValueError(f"el análisis no contiene métrica para el candidato '{args.candidato}'")
+    # el recibo y --analisis llegan relativos al cwd de quien llamó; el ledger
+    # guarda las rutas relativas a su propio directorio, el del experimento,
+    # para que check las encuentre desde cualquier cwd.
+    experimento = args.ledger.resolve().parent
     return {
         "fase": args.fase,
         "iteracion": args.iteracion,
         "candidato": args.candidato,
         "run_id": receipt["run_id"],
-        "crudo": receipt.get("crudo"),
+        "crudo": relativa_al_experimento(receipt.get("crudo"), experimento),
         "sha256_crudo": receipt.get("sha256_crudo"),
         "metrica": metric,
         "analisis": {
@@ -113,12 +118,17 @@ def armar_resultado(args):
             "correccion": analysis.get("correccion"),
             "alpha": analysis.get("alpha"),
             "semilla": analysis.get("semilla"),
-            "ruta": str(args.analisis),
+            "ruta": relativa_al_experimento(args.analisis, experimento),
         },
         "test_aplicado": args.test_aplicado,
         "costo": receipt["costo"],
         "fuentes": receipt.get("casos"),
     }
+
+def relativa_al_experimento(ruta, experimento):
+    if not ruta:
+        return ruta
+    return os.path.relpath(Path(ruta).resolve(), experimento)
 
 def buscar_registro(registros, tipo, clave):
     """Primer registro de ese tipo con la misma (iteracion, candidato, linaje)."""
@@ -172,7 +182,7 @@ def agregar_registro(ledger, contrato, registro, tipo):
         archivo.write(json.dumps(registro, ensure_ascii=False, separators=(",", ":")) + "\n")
     print(json.dumps(registro, ensure_ascii=False, separators=(",", ":")))
 
-def verificar_cruce(registro):
+def verificar_cruce(ledger, registro):
     """Recalcula nada: relee el análisis en disco y compara.
     Sin esto, el ledger queda editable después del hecho: nada impide subir una
     métrica una vez escrita la línea. El análisis es el testigo independiente.
@@ -182,7 +192,7 @@ def verificar_cruce(registro):
     if not ruta:
         return ["resultado sin ruta de análisis"]
     try:
-        analisis = json.loads(Path(ruta).read_text(encoding="utf-8"))
+        analisis = json.loads((ledger.parent / ruta).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         return [f"no se pudo releer el análisis '{ruta}': {exc}"]
     esperada = analisis.get("metricas", {}).get(registro.get("candidato"))
@@ -197,9 +207,10 @@ def verificar_cruce(registro):
         # reescribir el raw después del análisis dejaría un ledger coherente
         # consigo mismo pero desconectado de lo que realmente se midió. Borrarlo
         # deja el resultado igual de sin auditar.
-        if not Path(crudo).exists():
+        archivo = ledger.parent / crudo
+        if not archivo.exists():
             problemas.append(f"el crudo '{crudo}' ya no existe, el resultado no se puede auditar")
-        elif hashlib.sha256(Path(crudo).read_bytes()).hexdigest() != registro.get("sha256_crudo"):
+        elif hashlib.sha256(archivo.read_bytes()).hexdigest() != registro.get("sha256_crudo"):
             problemas.append(f"el crudo '{crudo}' cambió después de registrarse")
     return problemas
 
@@ -241,7 +252,7 @@ def comprobar(ledger, contrato):
                 validar_resultado(registro)
             except ValueError as exc:
                 errores.append(f"línea {numero}: {exc}")
-            errores.extend(f"línea {numero}: {problema}" for problema in verificar_cruce(registro))
+            errores.extend(f"línea {numero}: {problema}" for problema in verificar_cruce(ledger, registro))
         elif registro.get("tipo") == "diagnostico":
             # un resultado sin diagnóstico no es un error acá: la ronda escribe sus
             # resultados y corre esta comprobación antes de que el agente interprete nada.
