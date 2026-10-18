@@ -79,6 +79,8 @@ def validar_resultado(registro):
         raise ValueError("todo resultado debe citar el run_id del recibo que lo respalda")
     if not registro.get("sha256_crudo"):
         raise ValueError("todo resultado debe citar el sha256 del crudo analizado")
+    if not registro.get("sha256_analisis"):
+        raise ValueError("todo resultado debe citar el sha256 del análisis que lo produjo")
 
 def armar_resultado(args):
     """Arma el resultado desde el recibo y el análisis: el LLM no escribe cifras.
@@ -89,7 +91,8 @@ def armar_resultado(args):
     llega después del dato y el append-only prohíbe editar esta línea.
     """
     receipt = json.loads(args.recibo.read_text(encoding="utf-8"))
-    analysis = json.loads(args.analisis.read_text(encoding="utf-8"))
+    analysis_bytes = args.analisis.read_bytes()
+    analysis = json.loads(analysis_bytes)
     if receipt.get("estado") != "completed":
         raise ValueError(f"el recibo '{receipt.get('run_id')}' no está completo: {receipt.get('estado')}")
     for field in ("iteracion", "candidato"):
@@ -113,6 +116,7 @@ def armar_resultado(args):
         "crudo": relativa_al_experimento(receipt.get("crudo"), experimento),
         "sha256_crudo": receipt.get("sha256_crudo"),
         "metrica": metric,
+        "sha256_analisis": hashlib.sha256(analysis_bytes).hexdigest(),
         "analisis": {
             "metodo": analysis.get("metodo"),
             "correccion": analysis.get("correccion"),
@@ -192,9 +196,15 @@ def verificar_cruce(ledger, registro):
     if not ruta:
         return ["resultado sin ruta de análisis"]
     try:
-        analisis = json.loads((ledger.parent / ruta).read_text(encoding="utf-8"))
+        datos = (ledger.parent / ruta).read_bytes()
+        analisis = json.loads(datos)
     except (OSError, json.JSONDecodeError) as exc:
         return [f"no se pudo releer el análisis '{ruta}': {exc}"]
+    # sin este hash, editar el análisis y la métrica del ledger a la par deja
+    # ambos coherentes. Quien además reescribe el hash pasa acá; eso lo cobra
+    # el recálculo desde los crudos de verificar_reporte.py --strict.
+    if hashlib.sha256(datos).hexdigest() != registro.get("sha256_analisis"):
+        problemas.append(f"el análisis '{ruta}' cambió después de registrarse")
     esperada = analisis.get("metricas", {}).get(registro.get("candidato"))
     if esperada is None:
         return [f"el análisis '{ruta}' no contiene al candidato '{registro.get('candidato')}'"]

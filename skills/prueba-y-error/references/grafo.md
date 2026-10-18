@@ -127,11 +127,15 @@ RECOMENDAR, SEGUIR MIDIENDO o ABANDONAR, con tamaño de efecto, intervalo y
 corrección por comparación múltiple.
 
 `scripts/verificar_reporte.py --strict --claims-json` valida claims estructurados
-contra resultados identificados por linaje: recomputa el efecto y comprueba que
-los intervalos estén ordenados. Los requisitos de separación se exigen sólo a
-`RECOMENDAR` —intervalo del efecto que excluye el umbral, p ajustado bajo el
-alfa, fuentes A/B disjuntas y confirmación independiente— porque `SEGUIR
-MIDIENDO` y `ABANDONAR` son precisamente los veredictos que reportan su ausencia.
+contra resultados identificados por linaje: carga el análisis que esos
+resultados citan, comprueba su hash, exige que efecto, intervalo del efecto, p
+ajustado, umbral y alfa del claim sean los de la comparación `mejor::segundo`
+de ese análisis, y en modo estricto lo recalcula desde los crudos. Los
+requisitos de separación se exigen sólo a `RECOMENDAR` —intervalo del efecto
+que excluye el umbral, p ajustado bajo el alfa, comparaciones de fase B con
+fuentes disjuntas de las de la fase A y confirmación independiente— porque
+`SEGUIR MIDIENDO` y `ABANDONAR` son precisamente los veredictos que reportan su
+ausencia.
 Los números del texto sin respaldo son siempre advertencias, incluso con `--strict`.
 El modo estricto solo exige y valida los claims estructurados; el cierre debe usar
 claims y modo estricto.

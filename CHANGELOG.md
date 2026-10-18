@@ -2,6 +2,12 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.10.0] - 2026-10-18
+
+### Cambiado
+
+- **`prueba-y-error`: el gate de `RECOMENDAR` coteja el claim contra el análisis en disco y lo recalcula.** `verificar_reporte.py` aceptaba `intervalo_efecto` y `p_ajustado` tal como los escribía el agente, solo en forma y umbral, y `confirmacion_independiente` se cumplía con un ledger sin fase B porque el conjunto vacío es disjunto. Un análisis con `separa False` y un claim con cifras inventadas pasaba `--strict`. Ahora cada comparación del claim cita, a través de los resultados del ledger, un `analisis/itN.json`; el verificador comprueba su sha256, busca la comparación `mejor::segundo` (así un orden invertido no pasa), y exige que `efecto`, `intervalo_efecto`, `p_ajustado`, `umbral` y `alpha` sean los del análisis. `RECOMENDAR` exige que `mejor` y `segundo` sean resultados de fase B y que exista al menos uno de fase A. Con `--strict` además vuelve a correr `analizar.py` sobre los crudos citados, con los parámetros que guarda el análisis, y rechaza un análisis que no se reproduce. Cada `resultado` guarda `sha256_analisis` y `check` detecta un análisis editado después de registrarse. Incompatible: los ledgers anteriores no tienen `sha256_analisis` y `check` les falla en cada resultado. La autoprueba pasa de 46 a 59 comprobaciones y su caso de veredictos corre un experimento real con fase A y B en vez de un ledger escrito a mano. Lo encontró la auditoría lateral del 2026-10-18.
+
 ## [2.9.0] - 2026-10-18
 
 ### Agregado

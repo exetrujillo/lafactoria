@@ -6,6 +6,7 @@ la única manera de saber si siguen en pie es pagarle a un modelo para que audit
 Esto corre en segundos y no gasta un token.
 """
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -45,9 +46,10 @@ Separación lograda, presupuesto agotado o valor de información bajo.
 """
 PROTOCOLO = """import json, random, sys
 salida, semilla, candidato, ventaja = sys.argv[1], int(sys.argv[2]), sys.argv[3], float(sys.argv[4])
+desde = int(sys.argv[5]) if len(sys.argv) > 5 else 0
 r = random.Random(semilla)
 with open(salida, "w") as f:
-    for i in range(30):
+    for i in range(desde, desde + 30):
         base = random.Random(1000 + i).gauss(0.55, 0.12)
         f.write(json.dumps({"candidato": candidato, "caso": f"q{i}",
                             "valor": round(base + ventaja + r.gauss(0, 0.04), 4)}) + "\\n")
@@ -103,9 +105,19 @@ def prueba_flujo(raiz):
 
 def prueba_nulo(raiz):
     print("\nsin efecto real: no debe declarar separación")
-    montar(raiz, 0.0)
+    exp = montar(raiz, 0.0)
     hecho = correr([AQUI / "ronda.py", "EXP/ronda.json", "--exp", "EXP"], raiz)
     afirmar("no inventa separación", "separa=no" in hecho.stdout, hecho.stdout)
+    analisis = json.loads((exp / "analisis" / "it1.json").read_text(encoding="utf-8"))
+    uno, otro = (analisis["metricas"][c]["intervalo"] for c in analisis["orden"])
+    afirmar("los intervalos marginales se solapan", uno[0] <= otro[1] and otro[0] <= uno[1], str((uno, otro)))
+    (exp / "reporte.md").write_text("sin separación\n", encoding="utf-8")
+    for decision in ("SEGUIR MIDIENDO", "ABANDONAR"):
+        hecho = verificar(raiz, escribir_claims(exp, decision.split()[0].lower(), claims_desde(exp, 1, decision)))
+        afirmar(f"'{decision}' pasa --strict con intervalos solapados", hecho.returncode == 0, hecho.stdout)
+    hecho = verificar(raiz, escribir_claims(exp, "recomendar", claims_desde(exp, 1, "RECOMENDAR")))
+    afirmar("'RECOMENDAR' se rechaza si el IC del efecto cruza el umbral",
+            hecho.returncode == 1 and "excluya el umbral" in hecho.stdout, hecho.stdout)
 
 def prueba_sentido(raiz):
     print("\nsentido menor: gana la media más baja")
@@ -192,58 +204,118 @@ def prueba_costos(exp):
                     "--fase", "A", "--hash-contrato", "abc", "--", "echo", "hola"], exp.parent)
     afirmar("rechaza reutilizar un run_id", hecho.returncode == 2, hecho.stdout)
 
+def ronda_b(raiz, exp):
+    """Fase B sobre casos nuevos, q30 a q59, disjuntos de los de la fase A."""
+    (exp / "fuentes_b.json").write_text(json.dumps({"ids": [f"q{i}" for i in range(30, 60)]}), encoding="utf-8")
+    ronda = json.loads((exp / "ronda.json").read_text(encoding="utf-8"))
+    ronda.update({"iteracion": 2, "fase": "B", "fuentes": "EXP/fuentes_b.json"})
+    for candidato in ronda["candidatos"]:
+        candidato["comando"].append("30")
+    (exp / "ronda_b.json").write_text(json.dumps(ronda), encoding="utf-8")
+    return correr([AQUI / "ronda.py", "EXP/ronda_b.json", "--exp", "EXP"], raiz)
+
+def claims_desde(exp, iteracion, decision):
+    """Lo que hace un agente honesto: copiar las cifras del análisis en disco."""
+    analisis = json.loads((exp / "analisis" / f"it{iteracion}.json").read_text(encoding="utf-8"))
+    top = analisis["comparaciones"][0]
+    digest = json.loads((exp / "ledger.jsonl").read_text(encoding="utf-8").splitlines()[0])["hash_contrato"]
+    claims = {"decision": decision, "alpha": analisis["alpha"], "comparaciones": [{
+        "mejor": {"iteracion": iteracion, "candidato": top["mejor"], "hash_contrato": digest},
+        "segundo": {"iteracion": iteracion, "candidato": top["segundo"], "hash_contrato": digest},
+        "efecto": top["efecto"], "intervalo": analisis["metricas"][top["mejor"]]["intervalo"],
+        "intervalo_efecto": top["intervalo_efecto"], "p_ajustado": top["p_ajustado"],
+        "umbral": analisis["separacion"]["umbral"]}]}
+    if decision == "RECOMENDAR":
+        claims.update({"confirmacion_independiente": True, "correccion_comparaciones": analisis["correccion"]})
+    return claims
+
+def escribir_claims(exp, nombre, claims):
+    (exp / f"claims_{nombre}.json").write_text(json.dumps(claims), encoding="utf-8")
+    return f"EXP/claims_{nombre}.json"
+
+def verificar(raiz, claims, strict=True):
+    return correr([AQUI / "verificar_reporte.py", "EXP/reporte.md", "EXP/ledger.jsonl",
+                   *(["--strict"] if strict else []), "--claims-json", claims], raiz)
+
+def escribir_ledger(ledger, registros):
+    ledger.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in registros) + "\n", encoding="utf-8")
+
 def prueba_veredictos(raiz):
-    print("\ngates de decisión")
-    exp = raiz / "V"
-    exp.mkdir()
-    ledger = exp / "ledger.jsonl"
-    lineas = []
-    for nombre, valor, intervalo in (("a", 0.70, [0.60, 0.80]), ("b", 0.65, [0.55, 0.75])):
-        lineas.append({"tipo": "plan", "fase": "A", "iteracion": 1, "candidato": nombre,
-                       "hash_contrato": "aaa", "test_declarado": "t", "fuentes": ["c1"]})
-        lineas.append({"tipo": "resultado", "fase": "A", "iteracion": 1, "candidato": nombre,
-                       "hash_contrato": "aaa", "test_aplicado": "t", "fuentes": ["c1"],
-                       "metrica": {"valor": valor, "intervalo": intervalo, "n": 10}})
-    ledger.write_text("\n".join(json.dumps(l) for l in lineas) + "\n", encoding="utf-8")
+    print("\ngates de decisión: el claim se copia del análisis y el verificador lo coteja")
+    raiz = raiz / "V"
+    exp = montar(raiz, 0.09)
+    correr([AQUI / "ronda.py", "EXP/ronda.json", "--exp", "EXP"], raiz)
+    for candidato in ("base", "alto"):
+        diagnostico(raiz, candidato, "sigue")
+    hecho = ronda_b(raiz, exp)
+    afirmar("la ronda de fase B sobre casos nuevos termina bien y separa",
+            hecho.returncode == 0 and "separa=si" in hecho.stdout, hecho.stdout + hecho.stderr)
     (exp / "reporte.md").write_text("efecto observado y sin cerrar\n", encoding="utf-8")
 
-    def claim(decision, extra=None):
-        base = {"decision": decision, "comparaciones": [{
-            "mejor": {"iteracion": 1, "candidato": "a", "hash_contrato": "aaa"},
-            "segundo": {"iteracion": 1, "candidato": "b", "hash_contrato": "aaa"},
-            "efecto": 0.05, "intervalo": [0.60, 0.80], "umbral": 0.10}]}
-        if extra:
-            base["comparaciones"][0].update(extra.pop("comparacion", {}))
-            base.update(extra)
-        ruta = exp / f"claims_{decision.split()[0].lower()}.json"
-        ruta.write_text(json.dumps(base), encoding="utf-8")
-        return ruta
-
     for decision in ("SEGUIR MIDIENDO", "ABANDONAR"):
-        hecho = correr([AQUI / "verificar_reporte.py", "V/reporte.md", "V/ledger.jsonl",
-                        "--claims-json", str(claim(decision).relative_to(raiz))], raiz)
-        afirmar(f"'{decision}' se puede reportar con intervalos solapados",
+        hecho = verificar(raiz, escribir_claims(exp, decision.split()[0].lower(), claims_desde(exp, 1, decision)))
+        afirmar(f"'{decision}' se puede reportar desde la fase A, sin confirmación",
                 hecho.returncode == 0, hecho.stdout)
 
-    ruta = claim("RECOMENDAR", {"confirmacion_independiente": True,
-                                 "correccion_comparaciones": "holm", "alpha": 0.05,
-                                 "comparacion": {"intervalo_efecto": [0.01, 0.09], "p_ajustado": 0.02}})
-    hecho = correr([AQUI / "verificar_reporte.py", "V/reporte.md", "V/ledger.jsonl",
-                    "--claims-json", str(ruta.relative_to(raiz))], raiz)
-    afirmar("'RECOMENDAR' se rechaza si el IC del efecto cruza el umbral",
-            hecho.returncode == 1, hecho.stdout)
-
-    lineas.append({"tipo": "resultado", "fase": "B", "iteracion": 1, "candidato": "confirmacion",
-                   "hash_contrato": "aaa", "fuentes": ["c2"],
-                   "metrica": {"valor": 0.70, "intervalo": [0.60, 0.80], "n": 10}})
-    ledger.write_text("\n".join(json.dumps(l) for l in lineas) + "\n", encoding="utf-8")
-    ruta = claim("RECOMENDAR", {"confirmacion_independiente": True,
-                                "correccion_comparaciones": "holm", "alpha": 0.05,
-                                "comparacion": {"intervalo_efecto": [0.11, 0.20], "p_ajustado": 0.02}})
-    hecho = correr([AQUI / "verificar_reporte.py", "V/reporte.md", "V/ledger.jsonl",
-                    "--strict", "--claims-json", str(ruta.relative_to(raiz))], raiz)
-    afirmar("'RECOMENDAR' pasa con separación y confirmación independientes",
+    hecho = verificar(raiz, escribir_claims(exp, "recomendar", claims_desde(exp, 2, "RECOMENDAR")))
+    afirmar("'RECOMENDAR' pasa --strict con las cifras del análisis de fase B",
             hecho.returncode == 0, hecho.stdout)
+
+    for campo, valor in (("intervalo_efecto", [0.11, 0.20]), ("p_ajustado", 0.001)):
+        falso = claims_desde(exp, 2, "RECOMENDAR")
+        falso["comparaciones"][0][campo] = valor
+        hecho = verificar(raiz, escribir_claims(exp, f"falso_{campo}", falso))
+        afirmar(f"'RECOMENDAR' se rechaza si {campo} no es el del análisis",
+                hecho.returncode == 1 and campo in hecho.stdout, hecho.stdout)
+
+    invertido = claims_desde(exp, 2, "RECOMENDAR")
+    comparacion = invertido["comparaciones"][0]
+    comparacion["mejor"], comparacion["segundo"] = comparacion["segundo"], comparacion["mejor"]
+    hecho = verificar(raiz, escribir_claims(exp, "invertido", invertido))
+    afirmar("'RECOMENDAR' se rechaza con mejor y segundo invertidos",
+            hecho.returncode == 1 and "por encima de" in hecho.stdout, hecho.stdout)
+
+    hecho = verificar(raiz, escribir_claims(exp, "fase_a", claims_desde(exp, 1, "RECOMENDAR")))
+    afirmar("'RECOMENDAR' se rechaza si las comparaciones son de fase A",
+            hecho.returncode == 1 and "fase B" in hecho.stdout, hecho.stdout)
+
+def prueba_analisis_editado(raiz):
+    print("\nel análisis en disco está anclado: por hash en check, por recálculo en --strict")
+    raiz = raiz / "V"
+    exp = raiz / "EXP"
+    ledger = exp / "ledger.jsonl"
+    registros = [json.loads(l) for l in ledger.read_text(encoding="utf-8").splitlines() if l.strip()]
+    ruta = exp / "analisis" / "it2.json"
+    analisis = json.loads(ruta.read_text(encoding="utf-8"))
+    analisis["comparaciones"][0]["p_ajustado"] = 0.001
+    ruta.write_text(json.dumps(analisis), encoding="utf-8")
+    hecho = correr([AQUI / "ledger.py", "check", "EXP/ledger.jsonl", "EXP/contrato.md"], raiz)
+    afirmar("check detecta un análisis editado después de registrarse",
+            hecho.returncode != 0 and "cambió después de registrarse" in hecho.stdout, hecho.stdout)
+
+    digest = hashlib.sha256(ruta.read_bytes()).hexdigest()
+    for registro in registros:
+        if registro.get("tipo") == "resultado" and registro["iteracion"] == 2:
+            registro["sha256_analisis"] = digest
+    escribir_ledger(ledger, registros)
+    hecho = correr([AQUI / "ledger.py", "check", "EXP/ledger.jsonl", "EXP/contrato.md"], raiz)
+    afirmar("check solo ancla por hash: con el hash reescrito a la par no ve nada",
+            hecho.returncode == 0, hecho.stdout)
+    claims = escribir_claims(exp, "editado", claims_desde(exp, 2, "RECOMENDAR"))
+    hecho = verificar(raiz, claims, strict=False)
+    afirmar("sin --strict el claim copiado del análisis editado pasa", hecho.returncode == 0, hecho.stdout)
+    hecho = verificar(raiz, claims)
+    afirmar("--strict recalcula desde los crudos y lo rechaza",
+            hecho.returncode == 1 and "no se reproduce" in hecho.stdout, hecho.stdout)
+
+    for registro in registros:
+        if registro.get("tipo") == "resultado":
+            del registro["sha256_analisis"]
+            break
+    escribir_ledger(ledger, registros)
+    hecho = correr([AQUI / "ledger.py", "check", "EXP/ledger.jsonl", "EXP/contrato.md"], raiz)
+    afirmar("check exige sha256_analisis en cada resultado",
+            hecho.returncode != 0 and "sha256 del análisis" in hecho.stdout, hecho.stdout)
 
 def prueba_correccion_bonferroni():
     print("\ncorrección Bonferroni")
@@ -254,9 +326,9 @@ def prueba_correccion_bonferroni():
 
 def prueba_strict(raiz):
     print("\nmodo estricto: valida claims, no números sueltos")
-    reporte = raiz / "V" / "reporte.md"
-    ledger = raiz / "V" / "ledger.jsonl"
-    claims = raiz / "V" / "claims_seguir.json"
+    reporte = raiz / "V" / "EXP" / "reporte.md"
+    ledger = raiz / "V" / "EXP" / "ledger.jsonl"
+    claims = raiz / "V" / "EXP" / "claims_seguir.json"
     hecho = correr([AQUI / "verificar_reporte.py", str(reporte), str(ledger), "--strict",
                     "--claims-json", str(claims)], raiz)
     afirmar("strict permite números que solo generan advertencias",
@@ -342,6 +414,7 @@ def main():
         prueba_costos(exp)
         prueba_veredictos(raiz)
         prueba_strict(raiz)
+        prueba_analisis_editado(raiz)
         prueba_contrato(raiz)
         prueba_otro_cwd(raiz / "cwd")
     with tempfile.TemporaryDirectory() as tmp:

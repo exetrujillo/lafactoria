@@ -35,7 +35,7 @@ Un objeto JSON por línea, sin saltos internos.
 
 ```json
 {"tipo":"plan","ts":"2026-08-28T14:02:11Z","hash_contrato":"a3f9c1","hash_banco":"7d20be","fase":"A","iteracion":3,"candidato":"tope-8","fuentes":["consulta-03","consulta-04"],"hipotesis":"un tope mayor reduce las re-consultas sin encarecer la respuesta media","prediccion":{"magnitud":"aciertos por kilotoken","direccion":"sube","tamano_esperado":"+10% o mas"},"diseno":{"semilla":41,"orden":"aleatorizado","repeticiones":1,"entorno":"hash-e0c4","pareado_con":["tope-5"]},"test_declarado":"diferencia de medias pareada, relevante si supera el umbral del contrato","decision_si_falla":"muere en el halving","regla":"halving sobre el tercio inferior"}
-{"tipo":"resultado","ts":"2026-08-28T14:09:47Z","hash_contrato":"a3f9c1","fase":"A","iteracion":3,"candidato":"tope-8","run_id":"it3-tope-8","crudo":"crudos/it3-tope-8.jsonl","sha256_crudo":"9f2b8c...","metrica":{"valor":0.82,"intervalo":[0.71,0.93],"n":18},"analisis":{"metodo":"bootstrap_pareado","correccion":"holm","alpha":0.05,"semilla":"s1","ruta":"analisis/it3.json"},"test_aplicado":"diferencia de medias pareada","costo":{"corridas":1,"segundos":412,"consultas_banco":18,"rondas":1,"consultas_adaptativas":0},"fuentes":["consulta-03","consulta-04"]}
+{"tipo":"resultado","ts":"2026-08-28T14:09:47Z","hash_contrato":"a3f9c1","fase":"A","iteracion":3,"candidato":"tope-8","run_id":"it3-tope-8","crudo":"crudos/it3-tope-8.jsonl","sha256_crudo":"9f2b8c...","metrica":{"valor":0.82,"intervalo":[0.71,0.93],"n":18},"sha256_analisis":"4c1e7a...","analisis":{"metodo":"bootstrap_pareado","correccion":"holm","alpha":0.05,"semilla":"s1","ruta":"analisis/it3.json"},"test_aplicado":"diferencia de medias pareada","costo":{"corridas":1,"segundos":412,"consultas_banco":18,"rondas":1,"consultas_adaptativas":0},"fuentes":["consulta-03","consulta-04"]}
 {"tipo":"diagnostico","ts":"2026-08-28T14:12:03Z","hash_contrato":"a3f9c1","iteracion":3,"candidato":"tope-8","veredicto":"prediccion fallida: sube 2%, por debajo del umbral","triage":{"via":3,"justificacion":"medicion valida y codigo intacto; la hipotesis no se sostiene"},"decision":"muere"}
 ```
 
@@ -60,6 +60,7 @@ Un objeto JSON por línea, sin saltos internos.
 | `run_id` | `resultado` | el recibo de `correr.py` que respalda el costo |
 | `metrica` | `resultado` | valor, **intervalo** y n. Un valor sin intervalo no sirve |
 | `analisis` | `resultado` | método, corrección, alfa, semilla y ruta del análisis que produjo la métrica, relativa al directorio del experimento |
+| `sha256_analisis` | `resultado` | hash del archivo de análisis al registrar el resultado: si alguien lo edita después, `check` lo detecta |
 | `test_aplicado` | `resultado` | debe coincidir con `test_declarado`. Si no coincide, la línea es inválida |
 | `veredicto` | `diagnostico` | cumplida o fallida, con el número |
 | `triage` | `diagnostico` | solo si falló: vía 1, 2 o 3, con justificación |
@@ -118,11 +119,29 @@ si su crudo no participó del análisis citado. En el `diagnostico`, `--via` y
 decisión van siempre.
 
 `FUENTES.json` tiene la forma `{"ids":["caso-1","caso-2"]}`. Los mismos IDs
-se declaran en el plan y se verifican en el resultado. Para cerrar con
-`RECOMENDAR`, `claims.json` debe identificar cada resultado por iteración, candidato
-y `hash_contrato`, derivar el efecto y el intervalo de los resultados, declarar
-`correccion_comparaciones` y `confirmacion_independiente: true`; el verificador
-rechaza fuentes compartidas entre las fases A y B y rechaza intervalos superpuestos.
+se declaran en el plan y se verifican en el resultado.
+
+`claims.json` identifica cada resultado por iteración, candidato y
+`hash_contrato`, y copia las cifras del análisis que esos resultados citan: por
+comparación `efecto`, `intervalo_efecto`, `p_ajustado`, `umbral` y el `intervalo`
+marginal del mejor; arriba, `alpha`. El verificador carga ese análisis desde la
+ruta del ledger, comprueba que su hash sea el que registró el resultado, busca la
+comparación `mejor::segundo` (si el análisis no tiene a `mejor` por encima de
+`segundo`, rechaza) y exige que cada cifra coincida; con `--strict` además vuelve
+a correr `analizar.py` sobre los crudos y rechaza un análisis que no se reproduce.
+Para `RECOMENDAR`, `intervalo_efecto` y `p_ajustado` son obligatorios, el
+intervalo del efecto debe excluir el umbral y el p ajustado quedar bajo el alfa,
+cada comparación debe citar resultados de fase B, tiene que haber resultados de
+fase A con fuentes disjuntas de las de B, y hay que declarar
+`correccion_comparaciones` y `confirmacion_independiente: true`.
+
+```json
+{"decision":"RECOMENDAR","alpha":0.05,"correccion_comparaciones":"holm","confirmacion_independiente":true,
+ "comparaciones":[{"mejor":{"iteracion":5,"candidato":"tope-8","hash_contrato":"a3f9c1"},
+                   "segundo":{"iteracion":5,"candidato":"tope-5","hash_contrato":"a3f9c1"},
+                   "efecto":0.0912,"intervalo":[0.74,0.90],"intervalo_efecto":[0.0703,0.1118],
+                   "p_ajustado":0.0004998,"umbral":0.05}]}
+```
 
 Los argumentos `*-json` aceptan una ruta a un archivo JSON o el objeto JSON
 directamente. El comando fuerza el campo `tipo` y agrega el timestamp UTC si falta.

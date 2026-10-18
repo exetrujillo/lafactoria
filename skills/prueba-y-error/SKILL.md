@@ -151,23 +151,26 @@ el triage, la decisión.
   dice si la métrica es mejor cuanto mayor o cuanto menor; el efecto es mejor
   menos segundo en unidades de la métrica, negativo cuando el sentido es menor.
 - `scripts/ledger.py` deriva cada `resultado` del recibo y del análisis, y su
-  `check` relee ambos en disco: si alguien edita una métrica ya escrita o
-  reescribe o borra un crudo, la verificación falla. La interpretación —veredicto, triage,
+  `check` relee ambos en disco: si alguien edita una métrica ya escrita, toca
+  el análisis o reescribe o borra un crudo, la verificación falla. La interpretación —veredicto, triage,
   decisión— no entra ahí: va en un registro aparte, `ledger.py diagnostico`, que
   escribe el agente.
 - `scripts/verificar_presupuesto.py` suma recibos y los concilia con el ledger.
 - `scripts/verificar_contrato.py` cierra el nodo 0 con campos ejecutables, entre
   ellos el sentido de la métrica, que `ronda.py` exige igual en `ronda.json`.
-- `scripts/verificar_reporte.py --strict --claims-json` exige y valida los claims;
-  los números del texto que no aparecen en el ledger siempre quedan como advertencias.
+- `scripts/verificar_reporte.py --strict --claims-json` exige y valida los claims:
+  cada cifra se coteja contra el análisis en disco que citan los resultados, y
+  con `--strict` ese análisis se recalcula desde los crudos. `RECOMENDAR` exige
+  comparaciones de fase B. Los números del texto que no aparecen en el ledger
+  siempre quedan como advertencias.
 - `scripts/ronda.py` encadena todo lo anterior para una ronda entera, y no abre
   una ronda nueva mientras queden resultados sin diagnosticar.
 
 `scripts/autoprueba.py` ejercita todo lo anterior contra sus propios modos de
-fallo —métrica inflada a mano, crudo reescrito o borrado, costo subdeclarado, `run_id`
-reutilizado, separación inventada— en segundos y sin gastar un token. Correrla
-después de tocar cualquier script es más barato y más fiable que pedir una
-auditoría a un modelo.
+fallo —métrica inflada a mano, crudo reescrito o borrado, análisis editado, costo
+subdeclarado, `run_id` reutilizado, claim con cifras ajenas al análisis— en
+segundos y sin gastar un token. Correrla después de tocar cualquier script es
+más barato y más fiable que pedir una auditoría a un modelo.
 
 Lo que el arnés todavía no puede hacer: comprobar que el protocolo mida lo que
 el contrato dice que mide. Un instrumento mal diseñado produce recibos, hashes y
@@ -208,7 +211,11 @@ Después de la compuerta, ejecuta estos pasos sin pedir confirmación entre ello
    el `ronda.json` siguiente y vuelve al paso 2. `ronda.py` comprueba el
    presupuesto antes de gastar y se bloquea solo.
 5. Cuando se cumple un criterio de parada, redacta el informe y su `claims.json`
-   desde el ledger; corre `verificar_reporte.py --strict --claims-json EXP/claims.json`.
+   desde el ledger. Las cifras de cada comparación (`efecto`, `intervalo_efecto`,
+   `p_ajustado`, `umbral`, `alpha`) se copian tal cual del `analisis/itN.json` que
+   citan los resultados, sin redondear; corre
+   `verificar_reporte.py --strict --claims-json EXP/claims.json`, que las coteja
+   contra ese análisis y lo recalcula desde los crudos.
 6. Decide `RECOMENDAR`, `SEGUIR MIDIENDO` o `ABANDONAR`. Solo después de esa
    decisión pregunta al usuario si hace falta una acción que el contrato no haya
    delegado en la política. Antes de `RECOMENDAR`, comprueba que la confirmación
