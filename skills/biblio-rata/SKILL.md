@@ -46,21 +46,28 @@ hace falta indexar a mano.
 python3 $SK/scripts/buscar.py "successive halving" --n 8
 ```
 
-Cada línea es `slug p.123 · BM25 · …fragmento…`. Más negativo es mejor y ya
-vienen ordenados. Opciones: `--n` cuántos resultados, `--doc SLUG` para acotar a
-un documento (acepta prefijos del slug), `--tokens` para alargar el fragmento,
-`--listar` para ver qué documentos hay. Para sintaxis FTS5 compleja, lee
-`references/consultas.md` antes de buscar.
+Cada línea es `slug p.123 · BM25 · …fragmento…`. El slug es la ruta del PDF
+relativa al corpus, sin la extensión: `li-2018` para un PDF en la raíz,
+`bandits/li-2018` si está en la subcarpeta `bandits/`. Más negativo es mejor y
+ya vienen ordenados. Opciones: `--n` cuántos resultados, `--doc SLUG` para
+acotar a un documento (acepta el slug entero, su último componente, o un
+prefijo de cualquiera de los dos si es inequívoco), `--tokens` para alargar el
+fragmento, `--listar` para ver qué documentos hay. Para sintaxis FTS5
+compleja, lee `references/consultas.md` antes de buscar.
 
 **3. Leer la página exacta solo si el fragmento no alcanza:**
 
 ```sh
-python3 $SK/scripts/pagina.py li-2018 6        # una página
+python3 $SK/scripts/pagina.py li-2018 6        # una página; también vale bandits/li-2018
 python3 $SK/scripts/pagina.py garnett --ficha  # metadatos e índice del PDF
 ```
 
-**4. Citar siempre `documento p.N`.** Es lo que hace verificable la respuesta, y
-sale gratis porque el buscador ya devuelve la página.
+El documento se nombra igual que en `--doc`: slug entero, último componente o
+prefijo inequívoco.
+
+**4. Citar siempre `slug p.N`**, con el slug tal como lo imprime el buscador.
+Es lo que hace verificable la respuesta, y sale gratis porque el buscador ya
+devuelve la página.
 
 ## Reglas de gasto
 

@@ -14,7 +14,9 @@ CREATE VIRTUAL TABLE pagina USING fts5(
 - **`remove_diacritics 2`**: los acentos se ignoran. `medicion` encuentra
   `medición`. Sirve para no pelear con el teclado.
 - **`slug` y `pag` van sin indexar**: no se puede filtrar por documento con la
-  sintaxis de columnas de FTS5. Para eso está `--doc` en `buscar.py`.
+  sintaxis de columnas de FTS5. Para eso está `--doc` en `buscar.py`, que
+  acepta el slug entero, su último componente o un prefijo inequívoco de
+  cualquiera de los dos.
 
 ## Operadores
 
@@ -67,8 +69,9 @@ buscar.py '"failure-inducing input"'
 # dos ideas que deben aparecer cerca, no solo en la misma página
 buscar.py "NEAR(budget candidates, 8)"
 
-# acotar a un documento (admite prefijo del slug si es inequívoco)
+# acotar a un documento: slug entero, último componente o prefijo inequívoco
 buscar.py "regret bound" --doc lattimore
+buscar.py "regret bound" --doc bandits/lattimore-2020
 
 # ampliar el fragmento cuando la línea queda cortada
 buscar.py "value of information" --tokens 40
@@ -99,6 +102,9 @@ una forma de la palabra, o usar un prefijo corto.
 li-2018-hyperband p.6 · -6.94 · …3.1 [Successive] [Halving] Hyperband extends…
 └── slug          └ pág └ BM25   └ fragmento con los aciertos entre corchetes
 ```
+
+El slug es la ruta del PDF relativa al corpus sin la extensión. Si el PDF está
+en una subcarpeta, sale con ella: `bandits/li-2018-hyperband p.6`.
 
 BM25 es negativo por convención: **más negativo es mejor**, y los resultados ya
 vienen ordenados. La última línea dice cuántas páginas coincidieron en total; si

@@ -17,6 +17,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True  # no ensuciar caché
 sys.path.insert(0, str(Path(__file__).parent))
 import entorno as E
+from indexar import resolver_doc
 
 BLANCOS = re.compile(r"\s+")
 
@@ -28,15 +29,6 @@ def _actualizar_indice(corpus: Path) -> None:
     if not E.ruta_db(corpus).is_file():
         print(f"(no había índice en {corpus}; construyéndolo)", file=sys.stderr)
     indexar(corpus, out=sys.stderr)
-
-def _resolver_doc(con: sqlite3.Connection, doc: str) -> str:
-    cands = [s for (s,) in con.execute("SELECT slug FROM doc")
-             if s == doc or s.startswith(doc)]
-    if len(cands) == 1:
-        return cands[0]
-    if not cands:
-        raise SystemExit(f"error: ningún documento coincide con '{doc}'")
-    raise SystemExit(f"error: '{doc}' es ambiguo: {', '.join(cands)}")
 
 def _buscar(con, consulta, n, doc, tokens):
     filtro = " AND slug = ?" if doc else ""
@@ -66,7 +58,8 @@ def main(argv: list[str]) -> int:
     p.add_argument("--corpus", help="directorio con los PDF")
     p.add_argument("--n", type=int, default=8, help="cuántos resultados (8)")
     p.add_argument("--tokens", type=int, default=24, help="largo del fragmento (24)")
-    p.add_argument("--doc", help="acotar a un documento; admite prefijo del slug")
+    p.add_argument("--doc", help="acotar a un documento: slug, su último "
+                   "componente o un prefijo inequívoco")
     p.add_argument("--listar", action="store_true", help="listar los documentos")
     a = p.parse_args(argv)
 
@@ -80,7 +73,7 @@ def main(argv: list[str]) -> int:
         listar(corpus)
         return 0
     con = sqlite3.connect(E.ruta_db(corpus))
-    doc = _resolver_doc(con, a.doc) if a.doc else None
+    doc = resolver_doc(con, a.doc) if a.doc else None
     filas, total = _buscar(con, a.consulta, a.n, doc, a.tokens)
 
     if not filas:

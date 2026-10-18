@@ -2,6 +2,12 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.13.0] - 2026-10-18
+
+### Cambiado
+
+- **`biblio-rata`: el slug es la ruta del PDF relativa al corpus, así dos PDF homónimos en carpetas distintas dejan de pisarse.** El slug era el nombre del archivo sin extensión y `doc.slug` es clave primaria, de modo que con `a/x.pdf` y `b/x.pdf` cada corrida de `indexar.py` reemplazaba uno por el otro, y como `buscar.py` pone el índice al día antes de cada búsqueda, cada búsqueda reindexaba un PDF, imprimía `+ x` y solo una de las dos copias era encontrable. pulpo-librero manda copiar la misma obra en dos sub-bibliotecas, así que el flujo prescrito producía la colisión. Ahora el slug es la ruta relativa al corpus sin la extensión, con `/` como separador (`tema/li-2018` para `tema/li-2018.pdf`; un PDF en la raíz sigue siendo su nombre). `meta` guarda una versión de esquema y, si un índice con filas no la trae o es otra, `indexar.py` avisa y reindexa todo, con lo que los índices existentes migran solos en la siguiente búsqueda. `--doc` de `buscar.py` y el argumento de `pagina.py` comparten un solo `resolver_doc` en `indexar.py`: slug exacto, último componente exacto, prefijo del slug, prefijo del último componente, parando en el primer nivel con candidatos; así `--doc li-2018` sigue sirviendo con el PDF en una subcarpeta y `--doc li` resuelve a `tema/li` aunque exista `tema/li-2018-hyperband`, que antes salía ambiguo. `--listar` y las líneas `+`/`-` ya no recortan el slug. El SKILL.md y `consultas.md` documentan el slug nuevo y lo que acepta `--doc`. Lo encontró la auditoría lateral del 2026-10-18.
+
 ## [2.12.0] - 2026-10-18
 
 ### Cambiado

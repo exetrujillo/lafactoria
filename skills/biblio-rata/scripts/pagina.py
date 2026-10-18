@@ -19,6 +19,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).parent))
 import entorno as E
+from indexar import resolver_doc
 
 TOPE = 5
 
@@ -41,7 +42,8 @@ def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(
         prog="pagina.py", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("slug", help="documento; admite prefijo del slug")
+    p.add_argument("slug", help="documento: slug, su último componente "
+                   "o un prefijo inequívoco")
     p.add_argument("desde", nargs="?", type=int, help="primera página")
     p.add_argument("hasta", nargs="?", type=int, help="última página (opcional)")
     p.add_argument("--corpus", help="directorio con los PDF")
@@ -54,14 +56,7 @@ def main(argv: list[str]) -> int:
         raise SystemExit(f"error: no hay índice en {db}; corre indexar.py")
     con = sqlite3.connect(db)
 
-    cands = [s for (s,) in con.execute("SELECT slug FROM doc")
-             if s == a.slug or s.startswith(a.slug)]
-    if len(cands) != 1:
-        raise SystemExit(
-            f"error: '{a.slug}' " +
-            ("no coincide con ningún documento" if not cands
-             else "es ambiguo: " + ", ".join(cands)))
-    slug = cands[0]
+    slug = resolver_doc(con, a.slug)
 
     if a.ficha:
         ficha(con, slug)

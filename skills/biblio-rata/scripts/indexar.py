@@ -6,7 +6,12 @@
 Se salta los PDF cuya ruta, mtime y tamaño no cambiaron y saca del
 índice los que ya no están en disco. Si el extractor disponible cambió
 desde la última corrida, reindexa todo, porque el texto extraído no es
-comparable entre extractores.
+comparable entre extractores. Lo mismo si el índice es de una versión
+anterior del esquema.
+
+El slug de cada documento es su ruta relativa al corpus sin la extensión,
+con `/` como separador, así dos PDF homónimos en carpetas distintas no se
+pisan.
 """
 from __future__ import annotations
 import json
@@ -21,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import entorno as E
 
 UMBRAL_DENSIDAD = 200
+ESQUEMA_VERSION = "2"
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS meta(clave TEXT PRIMARY KEY, valor TEXT);
@@ -111,6 +117,24 @@ def leer_meta(con: sqlite3.Connection, clave: str) -> str | None:
 def escribir_meta(con: sqlite3.Connection, clave: str, valor: str) -> None:
     con.execute("INSERT OR REPLACE INTO meta VALUES (?,?)", (clave, str(valor)))
 
+def resolver_doc(con: sqlite3.Connection, doc: str) -> str:
+    """Slug exacto, último componente exacto, prefijo del slug, prefijo del
+    último componente. Para en el primer nivel con candidatos."""
+    slugs = [s for (s,) in con.execute("SELECT slug FROM doc")]
+    niveles = (
+        lambda s: s == doc,
+        lambda s: s.rsplit("/", 1)[-1] == doc,
+        lambda s: s.startswith(doc),
+        lambda s: s.rsplit("/", 1)[-1].startswith(doc),
+    )
+    for nivel in niveles:
+        cands = [s for s in slugs if nivel(s)]
+        if len(cands) == 1:
+            return cands[0]
+        if cands:
+            raise SystemExit(f"error: '{doc}' es ambiguo: {', '.join(cands)}")
+    raise SystemExit(f"error: ningún documento coincide con '{doc}'")
+
 def listar(corpus: Path) -> None:
     db = E.ruta_db(corpus)
     if not db.is_file():
@@ -118,8 +142,9 @@ def listar(corpus: Path) -> None:
     con = sqlite3.connect(db)
     filas = con.execute(
         "SELECT slug, paginas, titulo FROM doc ORDER BY slug").fetchall()
+    ancho = max((len(f[0]) for f in filas), default=52)
     for slug, pags, titulo in filas:
-        print(f"{slug:<52} {pags:>5} p.  {(titulo or '')[:40]}")
+        print(f"{slug:<{ancho}} {pags:>5} p.  {(titulo or '')[:40]}")
     print(f"\n{len(filas)} documentos · {sum(f[1] or 0 for f in filas)} páginas")
 
 def indexar(corpus: Path, rehacer: bool = False, out=sys.stdout) -> dict:
@@ -129,6 +154,11 @@ def indexar(corpus: Path, rehacer: bool = False, out=sys.stdout) -> dict:
     if previo and previo != env["extractor"]:
         print(f"aviso: el extractor cambió de {previo} a {env['extractor']}; "
               f"reindexando todo", file=out)
+        rehacer = True
+    hay_docs = con.execute("SELECT 1 FROM doc LIMIT 1").fetchone() is not None
+    if hay_docs and leer_meta(con, "esquema") != ESQUEMA_VERSION:
+        print("aviso: el índice es de una versión anterior del esquema; "
+              "reindexando todo", file=out)
         rehacer = True
     if rehacer:
         con.execute("DELETE FROM pagina")
@@ -148,7 +178,7 @@ def indexar(corpus: Path, rehacer: bool = False, out=sys.stdout) -> dict:
     nuevos = saltados = paginas_tot = 0
     vistos = set()
     for ruta in pdfs:
-        slug = ruta.stem
+        slug = ruta.relative_to(corpus).with_suffix("").as_posix()
         vistos.add(slug)
         st = ruta.stat()
         firma = (str(ruta), st.st_mtime, st.st_size)
@@ -178,15 +208,16 @@ def indexar(corpus: Path, rehacer: bool = False, out=sys.stdout) -> dict:
              st.st_mtime, st.st_size, info["toc"]))
         nuevos += 1
         paginas_tot += len(paginas)
-        print(f"  + {slug[:56]:<56} {len(paginas):>5} p.", file=out)
+        print(f"  + {slug:<56} {len(paginas):>5} p.", file=out)
 
     borrados = sorted(set(conocidos) - vistos)
     for slug in borrados:
         con.execute("DELETE FROM pagina WHERE slug=?", (slug,))
         con.execute("DELETE FROM doc WHERE slug=?", (slug,))
-        print(f"  - {slug[:56]}", file=out)
+        print(f"  - {slug}", file=out)
 
     escribir_meta(con, "extractor", env["extractor"])
+    escribir_meta(con, "esquema", ESQUEMA_VERSION)
     con.commit()
     if nuevos or borrados:
         con.execute("INSERT INTO pagina(pagina) VALUES ('optimize')")
