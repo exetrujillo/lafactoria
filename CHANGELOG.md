@@ -2,6 +2,14 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.17.1] - 2026-10-19
+
+### Corregido
+
+- **Los adaptadores de `pulpo-librero` y `descargar` ya no esperan un `Retry-After` de horas.** `curl --retry` obedece el `Retry-After` de un `429`, y uno de OpenAlex con `retry-after: 63890` dejó un adaptador colgado 17 h. Los 13 adaptadores que reintentan y `descargar` suman `--retry-max-time 120`: curl sigue reintentando los fallos transitorios, pero si la espera pedida pasa de ese tope falla en el acto. Medido contra un servidor local: con `Retry-After: 3600` sale en milisegundos tras un solo pedido, con `Retry-After: 2` reintenta como antes y sin el flag se cuelga. En `core.rs`, cuyo `--max-time` es de 120 s, un timeout ya no se reintenta.
+- `openalex.rs` distingue el `429`, como ya hacía `arxiv.rs`. Si el `Retry-After` pasa de 120 s, el error dice que se agotó el cupo diario y en cuánto tiempo vuelve. Si no, dice que espere un minuto. Cualquier otro fallo informa el código HTTP en vez de un "no respondió correctamente" sin más. Con una prueba unitaria del mensaje. El SKILL.md avisa que sin clave el cupo diario se agota en una corrida grande y que conviene reservarlo para `resolver`.
+- `descargar` reconoce Anubis en cualquier idioma. Anubis traduce su título según `Accept-Language`, y a `descargar`, que pide español, HAL le respondió "¡Asegurándonos de que no eres un robot!", que no estaba entre los títulos conocidos, así que la obra quedaba `not_a_pdf` y el manifiesto mandaba a raspar una landing inexistente. Ahora basta con que el cuerpo cargue los scripts de Anubis (`within.website/x/cmd/anubis/`). La misma URL de HAL quedó `blocked_challenge`. `fuentes.md` dice que HAL está tras Anubis, y `contrato.md` describe el criterio nuevo.
+
 ## [2.17.0] - 2026-10-19
 
 ### Agregado

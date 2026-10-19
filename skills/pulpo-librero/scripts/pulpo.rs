@@ -173,7 +173,7 @@ fn run_download(args: &[String]) {
                             break;
                         }
                         PdfValidation::NotPdf => {
-                            if fs::read(&temp_path).map(|cuerpo| es_titulo_de_challenge(&cuerpo)).unwrap_or(false) { challenged = true; } else { non_pdf = true; }
+                            if fs::read(&temp_path).map(|cuerpo| es_pagina_de_challenge(&cuerpo)).unwrap_or(false) { challenged = true; } else { non_pdf = true; }
                         }
                         PdfValidation::Unreadable => { unreadable_pdf = true; }
                         PdfValidation::Unavailable => { validator_unavailable = true; }
@@ -409,7 +409,13 @@ fn is_bot_challenge(headers: &str) -> bool {
 /// quedaban como `not_a_pdf`, que manda a raspar una landing que no existe.
 const TITULOS_CHALLENGE: [&str; 4] = ["just a moment", "client challenge", "making sure you", "preparing to download"];
 
-fn es_titulo_de_challenge(cuerpo: &[u8]) -> bool {
+/// Anubis traduce su título según `Accept-Language` (a `descargar`, que pide
+/// español, HAL le respondió "¡Asegurándonos de que no eres un robot!"), pero
+/// la ruta de sus scripts no cambia con el idioma.
+const MARCA_ANUBIS: &[u8] = b"within.website/x/cmd/anubis/";
+
+fn es_pagina_de_challenge(cuerpo: &[u8]) -> bool {
+    if cuerpo[..cuerpo.len().min(65536)].windows(MARCA_ANUBIS.len()).any(|ventana| ventana == MARCA_ANUBIS) { return true; }
     let inicio = String::from_utf8_lossy(&cuerpo[..cuerpo.len().min(8192)]).to_lowercase();
     let Some(desde) = inicio.find("<title") else { return false };
     let Some(abre) = inicio[desde..].find('>') else { return false };
@@ -426,7 +432,7 @@ fn download(url: &str, output: &Path, allowed_hosts: &[String], max_bytes: u64, 
         let headers = output.with_extension("headers");
         let mut comando = Command::new("curl");
         comando
-            .args(["--fail", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--connect-timeout", "20", "--max-time", "60", "--max-redirs", "0", "--max-filesize"])
+            .args(["--fail", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--retry-max-time", "120", "--connect-timeout", "20", "--max-time", "60", "--max-redirs", "0", "--max-filesize"])
             .arg(max_bytes.to_string()).args(["--user-agent", user_agent, "--header", ACCEPT, "--header", ACCEPT_LANGUAGE]);
         if let Some(anterior) = &previa { comando.args(["--referer", anterior]); }
         let result = comando.args(["--dump-header"])
@@ -523,18 +529,25 @@ mod tests {
 
     #[test]
     fn reconoce_los_titulos_de_challenge_medidos() {
-        assert!(es_titulo_de_challenge(b"<html><head><title>Client Challenge</title>"));
-        assert!(es_titulo_de_challenge(b"<title>Making sure you&#39;re not a bot!</title>"));
-        assert!(es_titulo_de_challenge(b"<TITLE lang=\"en\">\n  Just a moment...</TITLE>"));
-        assert!(es_titulo_de_challenge(b"<title>Preparing to download ...</title>"));
+        assert!(es_pagina_de_challenge(b"<html><head><title>Client Challenge</title>"));
+        assert!(es_pagina_de_challenge(b"<title>Making sure you&#39;re not a bot!</title>"));
+        assert!(es_pagina_de_challenge(b"<TITLE lang=\"en\">\n  Just a moment...</TITLE>"));
+        assert!(es_pagina_de_challenge(b"<title>Preparing to download ...</title>"));
     }
 
     #[test]
     fn una_landing_comun_no_es_challenge() {
-        assert!(!es_titulo_de_challenge(b"<title>Accent mark and visual word recognition</title>"));
-        assert!(!es_titulo_de_challenge(b"<title>Waiting: just a moment of history</title>"));
-        assert!(!es_titulo_de_challenge(b"<p>Just a moment</p>"));
-        assert!(!es_titulo_de_challenge(b""));
+        assert!(!es_pagina_de_challenge(b"<title>Accent mark and visual word recognition</title>"));
+        assert!(!es_pagina_de_challenge(b"<title>Waiting: just a moment of history</title>"));
+        assert!(!es_pagina_de_challenge(b"<p>Just a moment</p>"));
+        assert!(!es_pagina_de_challenge(b""));
+        assert!(!es_pagina_de_challenge(b"<title>Anubis and the afterlife</title><p>Anubis guards the tomb</p>"));
+    }
+
+    #[test]
+    fn reconoce_anubis_en_cualquier_idioma() {
+        let hal = "<title>¡Asegurándonos de que no eres un robot!</title><script id=\"anubis_challenge\" type=\"application/json\"></script><script src=\"/.within.website/x/cmd/anubis/static/js/main.mjs\"></script>";
+        assert!(es_pagina_de_challenge(hal.as_bytes()));
     }
 
     fn fila(celdas: &[&str]) -> Vec<String> { celdas.iter().map(|celda| celda.to_string()).collect() }

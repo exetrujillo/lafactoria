@@ -365,7 +365,7 @@ No entrega señal de tracción: la lista completa de campos de una obra no trae 
 
 Para descubrir literatura de frontera conviene incluir `UNDEFINED` (preprints y documentos de trabajo) además de `ART`. Muchas obras de estadística recientes salen como `UNDEFINED`, y con solo `ART` quedan fuera.
 
-`openAccess_bool:true` no garantiza archivo. Los registros `submitType_s:notice` son abiertos solo por un enlace externo (`linkExtUrl_s`, casi siempre doi.org). En el sondeo, 41 de 106 artículos abiertos venían así. `--solo-pdf` filtra `submitType_s:file`. El PDF es `fileMain_s` (`https://<portal>.hal.science/<halId>/document`), que devolvió `application/pdf` con `%PDF-` sin redirección. `files_s` puede traer anexos y va como alternativa. Los hosts son `hal.science` y subdominios de portal (`inria.hal.science`, `shs.hal.science`, `amu.hal.science`), distintos del host de la API, así que hay que autorizarlos en `descargar`.
+`openAccess_bool:true` no garantiza archivo. Los registros `submitType_s:notice` son abiertos solo por un enlace externo (`linkExtUrl_s`, casi siempre doi.org). En el sondeo, 41 de 106 artículos abiertos venían así. `--solo-pdf` filtra `submitType_s:file`. El PDF es `fileMain_s` (`https://<portal>.hal.science/<halId>/document`), que en el sondeo devolvió `application/pdf` con `%PDF-` sin redirección. El 2026-10-19 `hal.science` ya respondía con el challenge de Anubis (ver Zora, más abajo): `descargar` lo marca `blocked_challenge` y la copia hay que buscarla en otro host. `files_s` puede traer anexos y va como alternativa. Los hosts son `hal.science` y subdominios de portal (`inria.hal.science`, `shs.hal.science`, `amu.hal.science`), distintos del host de la API, así que hay que autorizarlos en `descargar`.
 
 Cuidados. Una consulta mal formada o un campo de orden inexistente vuelve con status 200 y el cuerpo `{"error":{"msg":...}}`, así que el scraper exige la clave `response`. `cursorMark` exige un desempate único en el orden (`docid`) y sin él da ese mismo error. `rows` tiene un tope silencioso de 10000. `halId_s` es el identificador estable y no coincide con `docid`.
 
@@ -494,8 +494,11 @@ El repositorio de la Universidad de Zúrich responde `200` con
 `<title>Making sure you're not a bot!</title>` y hojas de estilo de
 `within.website/x/xess`: es **Anubis**, una prueba de trabajo, no Cloudflare.
 Las cabeceras que mira `is_bot_challenge` (`cf-mitigated`, `server-timing: chlray`)
-no lo delatan; desde 2.4.0 el descargador lo reconoce por el `<title>` del cuerpo
-y lo registra como `blocked_challenge` (ver la sección siguiente).
+no lo delatan; el descargador lo registra como `blocked_challenge` (ver la
+sección siguiente). Desde 2.17.1 lo reconoce por la ruta de sus scripts
+(`within.website/x/cmd/anubis/`) y no solo por el `<title>`, porque Anubis traduce
+el título según `Accept-Language`: a `descargar`, que pide español, HAL le
+respondió "¡Asegurándonos de que no eres un robot!".
 
 Dos consecuencias prácticas: el PDF directo por `id/eprint/NNNN/1/archivo.pdf`
 tampoco pasa (devolvió `500`), y conviene buscar la obra en otro repositorio.
@@ -512,7 +515,8 @@ obras declaradas abiertas, en dos rondas distintas:
   `<title>Client Challenge</title>` y "Please enable JavaScript";
 - `pmc.ncbi.nlm.nih.gov/.../pdf/`: `<title>Preparing to download ...`, una
   prueba en JavaScript;
-- Zora: `<title>Making sure you're not a bot!</title>` (Anubis, arriba).
+- Zora: `<title>Making sure you're not a bot!</title>` (Anubis, arriba). En
+  otro idioma el título cambia, y a Anubis lo delata la ruta de sus scripts.
 
 `pulpo descargar` compara el `<title>` del cuerpo con esos títulos y con el
 "Just a moment..." de Cloudflare, y los marca `blocked_challenge`: terminal,

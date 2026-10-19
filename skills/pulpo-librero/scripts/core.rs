@@ -142,7 +142,7 @@ fn usage() -> ! {
 
 fn consultar(url: &str, destino: &str) -> Result<String, String> {
     let result = Command::new("curl")
-        .args(["--fail", "--location", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--connect-timeout", "20", "--max-time", "120", "--user-agent", "pulpo-librero/0.1", "--write-out", "%{http_code}", "--output"])
+        .args(["--fail", "--location", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--retry-max-time", "120", "--connect-timeout", "20", "--max-time", "120", "--user-agent", "pulpo-librero/0.1", "--write-out", "%{http_code}", "--output"])
         .arg(destino)
         .arg(url)
         .stderr(Stdio::inherit())

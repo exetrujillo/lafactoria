@@ -6,7 +6,10 @@ deja al menos 3 s entre peticiones y escribe un TSV con las columnas de
 `contrato.md`, incluidas `published` y `cited_by`. Todos aceptan `--query`,
 `--out`, `--desde YYYY-MM-DD` y `--max N` (25 por defecto); el resto de flags es
 propio de cada fuente. Salen con 2 por uso incorrecto, 1 por fallo de red o de
-archivo y 0 si escribieron el TSV. Lo que cada API entrega y lo que no está
+archivo y 0 si escribieron el TSV. Los fallos transitorios se reintentan dos
+veces (Semantic Scholar no reintenta), pero un `Retry-After` de más de dos
+minutos no se espera: el adaptador sale con 1 en el acto. En CORE, cuyo
+`--max-time` es de 120 s, un timeout tampoco se reintenta. Lo que cada API entrega y lo que no está
 medido en `fuentes.md`; acá va solo cómo invocarlos. Los tres adaptadores
 originales (arXiv, OpenAlex e Internet Archive) siguen documentados en el
 SKILL.md.

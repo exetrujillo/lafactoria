@@ -4,7 +4,7 @@
 use std::env;
 use std::fs;
 use std::io::Write;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -250,17 +250,36 @@ fn dois_pendientes(catalogo: &str, solo_relevante: bool, max: usize) -> Result<V
 
 fn consultar(url: &str, destino: &str) -> Result<String, String> {
     let result = Command::new("curl")
-        .args(["--fail", "--location", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--connect-timeout", "20", "--max-time", "60", "--user-agent", "pulpo-librero/0.1", "--output"])
+        .args(["--fail", "--location", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--retry-max-time", "120", "--connect-timeout", "20", "--max-time", "60", "--user-agent", "pulpo-librero/0.1", "--write-out", "%{http_code} %header{retry-after}", "--output"])
         .arg(destino)
         .arg(url)
-        .status();
+        .stderr(Stdio::inherit())
+        .output();
     thread::sleep(Duration::from_secs(PAUSA_SEGUNDOS));
     match result {
         Err(err) => return Err(format!("no se pudo ejecutar curl: {err}")),
-        Ok(status) if !status.success() => return Err("OpenAlex no respondió correctamente".to_string()),
+        Ok(salida) if !salida.status.success() => return Err(motivo_del_fallo(&String::from_utf8_lossy(&salida.stdout))),
         Ok(_) => {}
     }
     fs::read_to_string(destino).map_err(|err| format!("no se pudo leer {destino}: {err}"))
+}
+
+// curl no espera un Retry-After de más de 120 s (--retry-max-time), así que un
+// 429 que pide más es el cupo diario, que dura hasta la medianoche UTC, y no
+// el límite por segundo.
+fn motivo_del_fallo(write_out: &str) -> String {
+    let mut partes = write_out.split_whitespace();
+    let status = partes.next().unwrap_or("000");
+    if status != "429" {
+        return format!("OpenAlex no respondió correctamente (HTTP {status})");
+    }
+    match partes.next().and_then(|valor| valor.parse::<u64>().ok()) {
+        Some(segundos) if segundos > 120 => {
+            let falta = if segundos >= 3600 { format!("unas {} h", (segundos + 1800) / 3600) } else { format!("unos {} min", (segundos + 59) / 60) };
+            format!("OpenAlex respondió 429: se agotó el cupo diario y vuelve en {falta}; no reintentes antes")
+        }
+        _ => "OpenAlex respondió 429 (límite de peticiones); espera un minuto antes de reintentar".to_string(),
+    }
 }
 
 fn escribir_linea(file: &mut fs::File, linea: &str, out: &str) {
@@ -415,3 +434,17 @@ fn hoy() -> String {
 
 fn encode(value: &str) -> String { value.bytes().map(|b| match b { b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' => (b as char).to_string(), other => format!("%{other:02X}") }).collect() }
 fn clean(value: &str) -> String { value.replace('\t', " ").replace('\n', " ").replace('\r', " ") }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn distingue_el_cupo_diario_del_limite_por_segundo() {
+        assert!(motivo_del_fallo("429 63890").contains("unas 18 h"));
+        assert!(motivo_del_fallo("429 300").contains("unos 5 min"));
+        assert!(motivo_del_fallo("429 2").contains("un minuto"));
+        assert!(motivo_del_fallo("429 ").contains("un minuto"));
+        assert!(motivo_del_fallo("503 ").contains("HTTP 503"));
+    }
+}

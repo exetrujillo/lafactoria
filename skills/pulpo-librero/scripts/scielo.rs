@@ -352,7 +352,7 @@ fn fecha_valida(valor: &str) -> bool {
 
 fn consultar(url: &str, destino: &str) -> Result<String, String> {
     let result = Command::new("curl")
-        .args(["--fail", "--location", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--connect-timeout", "20", "--max-time", "60", "--user-agent", "pulpo-librero/0.1", "--output"])
+        .args(["--fail", "--location", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--retry-max-time", "120", "--connect-timeout", "20", "--max-time", "60", "--user-agent", "pulpo-librero/0.1", "--output"])
         .arg(destino)
         .arg(url)
         .status();

@@ -285,6 +285,12 @@ se queda sin ubicación y el orquestador decide si buscarla en otra fuente. La
 fusión posterior conserva `decision` y `decision_reason`, de modo que resolver
 nunca pisa el trabajo de revisión.
 
+Sin clave, OpenAlex da un cupo diario que una corrida grande agota: el
+2026-10-19 alcanzó para unas 67 búsquedas. Una consulta de `resolver` cuesta la
+décima parte que una búsqueda, así que conviene reservarle cupo. Agotado, el
+adaptador sale con 1 y dice en cuánto tiempo vuelve el cupo, que se renueva a
+medianoche UTC. No es una búsqueda sin resultados y no se reintenta antes.
+
 Para buscar en arXiv, compila el adaptador oficial Atom y conserva su salida
 como catálogo de candidatos. `--desde` acota por fecha de envío y ordena de lo
 más nuevo a lo más viejo; con `--orden relevancia` se mantiene el rango y se

@@ -71,9 +71,10 @@ Estados:
 - `unreadable_pdf`: el cuerpo parecía PDF, pero el extractor no pudo abrirlo.
 - `limit_exceeded`: no se incorporó por alcanzar un límite de archivos o bytes.
 - `blocked_challenge`: el proveedor respondió con un challenge anti-bot: las
-  cabeceras de Cloudflare `cf-mitigated: challenge` o `server-timing: chlray`, o
+  cabeceras de Cloudflare `cf-mitigated: challenge` o `server-timing: chlray`,
   un cuerpo HTML cuyo `<title>` es el de una página de challenge conocida
-  (Anubis, "Client Challenge", "Just a moment..."). Es terminal
+  ("Client Challenge", "Just a moment...") o un cuerpo que carga los scripts de
+  Anubis, en cualquier idioma. Es terminal
   y distinto de `http_error`: ninguna combinación de cabeceras lo pasa, así que
   no se reintenta por HTTP ni se prueban otras ubicaciones del mismo proveedor.
   La salida es buscar una copia en otro host, no insistir.
