@@ -1,6 +1,6 @@
 ---
 name: pulpo-librero
-description: Usa esta skill cuando el usuario quiera reunir o descargar papers y libros desde fuentes abiertas para incorporarlos a una biblioteca local compatible con biblio-rata.
+description: Usa esta skill cuando el usuario quiera reunir o descargar papers y libros desde fuentes abiertas, incluida la literatura reciente y de frontera de un tema, para incorporarlos a una biblioteca local compatible con biblio-rata.
 ---
 
 # Pulpo-librero
@@ -32,8 +32,13 @@ Antes de buscar o descargar, pregunta en una sola tanda:
    tiene la corrida? Antes de preguntar, busca las que ya tiene el proyecto
    (cada `catalogo.tsv` bajo `docs/literatura/`) y preséntalas: la ronda va a
    una de ellas o abre una sub-biblioteca nueva (ver "Sub-bibliotecas").
-3. ¿Qué fuentes abiertas se autorizan? Si no se especifica, propone arXiv,
-   OpenAlex e Internet Archive según se trate de papers o libros.
+3. ¿Qué fuentes abiertas se autorizan? Si no se especifica, propone según el
+   campo y el tipo de obra: arXiv, Semantic Scholar y Hugging Face Papers para
+   IA y computación; Crossref y OpenAlex para cualquier campo con DOI; OSF
+   Preprints, HAL y EconStor para ciencias sociales, estadística y economía;
+   Europe PMC y bioRxiv para neurociencias y biomedicina; SciELO y LA
+   Referencia para literatura hispana; Internet Archive para libros. La tabla
+   de `references/scrapers.md` dice qué entrega cada una.
 4. ¿Se quieren obras nuevas, versiones concretas o una lista cerrada de URLs?
 5. Si ya existe `catalogo.tsv`, ¿se deben revisar sus pendientes, incorporar una
    nueva fuente o descargar solo las obras ya marcadas como relevantes?
@@ -107,21 +112,35 @@ copiada en dos temas aparece dos veces.
    otra estructura.
 2. Convierte el problema en consultas y criterios de suficiencia: qué regiones,
    nombres alternativos, periodos, idiomas y tipos de obra cuentan. Anota esos
-   criterios para poder detectar documentación faltante.
+   criterios para poder detectar documentación faltante. Si el problema pide
+   literatura de frontera, fija un corte de fecha (24 meses suele bastar) y
+   decide si la señal es novedad, tracción o las dos: eso define `--desde` y
+   `--orden` en cada adaptador, y cuántas filas recientes sin citas se aceptan.
 3. Consulta `references/fuentes.md` y ejecuta los scrapers Rust específicos de
-   las fuentes pertinentes. OpenAlex sirve para descubrir metadatos y posibles
+   las fuentes pertinentes; los adaptadores de frontera se invocan como dice
+   `references/scrapers.md`. OpenAlex sirve para descubrir metadatos y posibles
    ubicaciones abiertas; no es una fuente de descarga en este flujo. No vuelques
    al contexto respuestas completas de APIs ni PDFs.
 4. Pasa cada salida de scraper a `scripts/pulpo.rs buscar`. El comando fusiona
    los metadatos en `catalogo.tsv`, junto a `manifest.tsv`, sin borrar filas ni
    decisiones previas. El agente orquestador inspecciona el catálogo y marca cada
    fila como `relevante` o `descartado`, siempre con un motivo; las nuevas quedan
-   `pendiente`.
+   `pendiente`. El catálogo trae `published` y `cited_by`, que el scraper llena
+   solo cuando la fuente informa el dato: una celda vacía significa que no se
+   sabe, no que sea cero ni antigua. Para priorizar entre las `pendiente`,
+   ordena por `published` y lee primero lo más reciente; usa `cited_by` para
+   comparar obras de una misma época, nunca entre épocas, porque lo reciente
+   tiene pocas citas por falta de tiempo y no de calidad. Ninguna de las dos
+   decide la relevancia: la decisión sigue saliendo del criterio del paso 2, y
+   `decision_reason` puede citarlas ("2025, 40 citas, estado del arte del
+   método").
 5. Si quedan filas `relevante` con DOI pero sin `pdf_url`, tiéndeles el puente
    antes de descargar: `scripts/openalex.rs resolver` pregunta por las copias
    abiertas de esos DOI y su salida vuelve al catálogo con `pulpo buscar`. Un DOI
    que no aparezca en la respuesta se informa como tal; no se le inventa una
-   ubicación.
+   ubicación. El mismo puente trae `cited_by` para las filas que vinieron de
+   una fuente sin citas (arXiv, bioRxiv, HAL, OSF, EconStor, LA Referencia),
+   así que resolver también sirve para medir tracción, no solo para ubicar.
 6. Solo después ejecuta `scripts/pulpo.rs descargar`: opera sobre filas
    `relevante`, prueba primero `pdf_url` y después `landing_url`, y no repite una
    fila ya `accepted` en el manifiesto. Usa un identificador de agente y límites
@@ -228,6 +247,23 @@ repositorio, y el catálogo registra la abierta. El scraper lee la respuesta con
 tocarlo, se edita `src/json_api.rs` del repositorio y se propaga, porque `lint`
 compara ambas copias byte a byte.
 
+Para literatura de frontera, `search` acota por fecha, ordena y filtra por
+tipo y por citas. `--desde` agrega como tope la fecha de hoy. Con `--orden
+citas` o `fecha`, la consulta va contra título y resumen y no contra el índice
+general, que con un orden distinto de relevancia trae obras de otras áreas; pon
+la frase entre comillas. `--max` es sinónimo de `--per-page`:
+
+```sh
+<tmp>/pulpo-openalex search --query '"tema exacto"' --out <tmp>/frontera.tsv \
+  --desde 2024-10-19 --orden citas --tipo "article|preprint|conference-paper" \
+  --min-citas 6 --max 50
+```
+
+El TSV suma `published` y `cited_by`. `--orden fecha` da lo último publicado,
+que todavía tiene pocas citas; para tracción usa `--orden citas`. En
+computación pide los tres tipos, porque `conference-paper` es la literatura
+principal y `article|preprint` lo excluye.
+
 El mismo adaptador tiende el puente entre el catálogo y la descarga. `resolver`
 toma las filas que ya tienen DOI pero todavía no tienen ubicación —vengan de
 otro scraper, de una lista cerrada del usuario o de una corrida anterior— y
@@ -250,11 +286,17 @@ fusión posterior conserva `decision` y `decision_reason`, de modo que resolver
 nunca pisa el trabajo de revisión.
 
 Para buscar en arXiv, compila el adaptador oficial Atom y conserva su salida
-como catálogo de candidatos:
+como catálogo de candidatos. `--desde` acota por fecha de envío y ordena de lo
+más nuevo a lo más viejo; con `--orden relevancia` se mantiene el rango y se
+prioriza lo pertinente. arXiv no da citas, así que `cited_by` llega vacía. Un
+`429` corta la corrida con exit 1, y no es una búsqueda sin resultados: el
+límite es del frontal de la API, persiste minutos y la IP de salida puede ser
+compartida, así que no reintentes en bucle.
 
 ```sh
 rustc scripts/arxiv.rs -O -o <tmp>/pulpo-arxiv
 <tmp>/pulpo-arxiv search --query "au:Apellido AND ti:tema" --out <tmp>/arxiv.tsv --max-results 25
+<tmp>/pulpo-arxiv search --query "all:\"tema\"" --desde 2024-10-19 --out <tmp>/arxiv-reciente.tsv --max 50
 
 # versión concreta, sin que la búsqueda pueda sustituirla por la actual
 <tmp>/pulpo-arxiv search --id 1706.03762v1 --out <tmp>/arxiv-v1.tsv
@@ -297,6 +339,24 @@ implementan evasión, JavaScript ni autenticación. Si `curl` no está disponibl
 informan el fallo sin instalar paquetes. Para lotes grandes, el orquestador
 conserva solo el resumen de salida y los manifiestos, no el cuerpo de las
 respuestas.
+
+## Adaptadores de frontera
+
+Once adaptadores más cubren lo que arXiv, OpenAlex e Internet Archive no
+alcanzan: Semantic Scholar, Crossref, Hugging Face Papers, OSF Preprints, Europe
+PMC, bioRxiv y medRxiv, SciELO, LA Referencia (con Redalyc), EconStor, HAL y
+CORE. Todos siguen el mismo contrato (`--query`, `--out`, `--desde`, `--max`,
+pausa de 3 s, TSV con `published` y `cited_by`) y se invocan como dice
+`references/scrapers.md`, que trae además la tabla de qué señal de tracción y
+qué PDF entrega cada uno. Lo medido sobre cada API, y lo que se sondeó y se
+descartó (OpenReview, SSRN), está en `references/fuentes.md`.
+
+Dos reglas valen para todos. La primera: una fuente sin citas no es una fuente
+sin tracción, porque `openalex resolver` la trae después por DOI. La segunda:
+varias de estas APIs no buscan por texto (bioRxiv, SciELO, EconStor) y el
+adaptador filtra en el cliente, así que cada corrida tiene un presupuesto de
+páginas o de obras revisadas que conviene acotar con `--desde` y las facetas
+de la fuente antes de subir `--max`.
 
 ## Vivencias propias
 

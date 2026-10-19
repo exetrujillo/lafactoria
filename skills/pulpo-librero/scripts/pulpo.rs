@@ -55,14 +55,10 @@ fn run_search(args: &[String]) {
         // El catálogo de otra biblioteca ya trae su identidad. Recalcularla con
         // `--source` cambia la de toda obra sin DOI y la desconecta de su manifiesto.
         let heredada = get("identity");
-        let identity = if !heredada.is_empty() { heredada } else if !doi.is_empty() { format!("doi:{doi}") } else { format!("{}:{}", clean_value(&source), id) };
-        let values = vec![identity.clone(), id, get("title"), doi, get("year"), get("is_oa"), get("oa_status"), get("license"), get("version"), get("landing_url"), get("pdf_url"), get("pdf_urls"), get("abstract"), format!("{}@{}", source, now), now.clone(), "pendiente".to_string(), String::new()];
+        let identity = if !heredada.is_empty() { heredada } else if !doi.is_empty() { format!("doi:{doi}") } else { identidad_sin_doi(&clean_value(&source), &id) };
+        let values = vec![identity.clone(), id, get("title"), doi, get("year"), get("is_oa"), get("oa_status"), get("license"), get("version"), get("landing_url"), get("pdf_url"), get("pdf_urls"), get("abstract"), get("published"), get("cited_by"), format!("{}@{}", source, now), now.clone(), "pendiente".to_string(), String::new()];
         if let Some(existing) = catalog.iter_mut().find(|old| old[0] == identity) {
-            let decision = existing[15].clone();
-            let reason = existing[16].clone();
-            let provenance = append_value(&existing[13], &format!("{}@{}", source, now));
-            for (index, value) in values.into_iter().enumerate() { if !value.is_empty() && index != 13 && index != 14 && index != 15 && index != 16 { existing[index] = value; } }
-            existing[13] = provenance; existing[15] = decision; existing[16] = reason;
+            fusionar(existing, values, &format!("{}@{}", source, now));
         } else {
             catalog.push(values); added += 1;
         }
@@ -232,7 +228,8 @@ fn run_download(args: &[String]) {
     }
 }
 
-const CATALOG_HEADER: [&str; 17] = ["identity", "id", "title", "doi", "year", "is_oa", "oa_status", "license", "version", "landing_url", "pdf_url", "pdf_urls", "abstract", "provenance", "discovered_at", "decision", "decision_reason"];
+const CATALOG_HEADER: [&str; 19] = ["identity", "id", "title", "doi", "year", "is_oa", "oa_status", "license", "version", "landing_url", "pdf_url", "pdf_urls", "abstract", "published", "cited_by", "provenance", "discovered_at", "decision", "decision_reason"];
+const CATALOG_HEADER_17: [&str; 17] = ["identity", "id", "title", "doi", "year", "is_oa", "oa_status", "license", "version", "landing_url", "pdf_url", "pdf_urls", "abstract", "provenance", "discovered_at", "decision", "decision_reason"];
 
 fn read_tsv(path: &Path) -> Result<Vec<Vec<String>>, String> {
     let file = fs::File::open(path).map_err(|err| format!("no se pudo leer {}: {err}", path.display()))?;
@@ -241,9 +238,29 @@ fn read_tsv(path: &Path) -> Result<Vec<Vec<String>>, String> {
 
 fn read_catalog(path: &Path) -> Result<Vec<Vec<String>>, String> {
     if !path.exists() { return Ok(vec![CATALOG_HEADER.iter().map(|value| value.to_string()).collect()]); }
-    let rows = read_tsv(path)?;
-    if rows.first().map(|row| row == &CATALOG_HEADER.iter().map(|value| value.to_string()).collect::<Vec<_>>()).unwrap_or(false) { return Ok(rows); }
-    Err(format!("{} no tiene el encabezado de catalogo.tsv esperado", path.display()))
+    migrar_catalogo(read_tsv(path)?).ok_or_else(|| format!("{} no tiene el encabezado de catalogo.tsv esperado", path.display()))
+}
+
+// La fusión indexa hasta `decision_reason`, y una fila editada a mano puede
+// perder los tabuladores finales: toda fila se completa hasta el encabezado.
+fn migrar_catalogo(mut rows: Vec<Vec<String>>) -> Option<Vec<Vec<String>>> {
+    let header = rows.first().cloned().unwrap_or_default();
+    if header == CATALOG_HEADER_17 {
+        for row in rows.iter_mut() { row.resize(CATALOG_HEADER_17.len(), String::new()); row.splice(13..13, [String::new(), String::new()]); }
+        rows[0] = CATALOG_HEADER.iter().map(|value| value.to_string()).collect();
+    } else if header != CATALOG_HEADER {
+        return None;
+    }
+    for row in rows.iter_mut() { if row.len() < CATALOG_HEADER.len() { row.resize(CATALOG_HEADER.len(), String::new()); } }
+    Some(rows)
+}
+
+fn fusionar(existing: &mut Vec<String>, values: Vec<String>, procedencia: &str) {
+    let decision = existing[17].clone();
+    let reason = existing[18].clone();
+    let provenance = append_value(&existing[15], procedencia);
+    for (index, value) in values.into_iter().enumerate() { if !value.is_empty() && index < 15 { existing[index] = value; } }
+    existing[15] = provenance; existing[17] = decision; existing[18] = reason;
 }
 
 fn write_catalog(path: &Path, rows: &[Vec<String>]) -> Result<(), String> {
@@ -258,6 +275,9 @@ fn get_any(get: &dyn Fn(&str) -> String, names: &[&str]) -> String { names.iter(
 fn normalize_doi(value: &str) -> String { value.trim().to_ascii_lowercase().trim_start_matches("https://doi.org/").trim_start_matches("http://doi.org/").trim_start_matches("doi:").to_string() }
 fn append_value(old: &str, value: &str) -> String { if old.is_empty() { value.to_string() } else if old.split(';').any(|part| part == value) { old.to_string() } else { format!("{old};{value}") } }
 fn clean_value(value: &str) -> String { value.replace('\t', " ").replace('\n', " ").replace('\r', " ") }
+// Los scrapers ya emiten el id como `<fuente>:<id>`; volver a anteponer la
+// fuente daba `arxiv:arxiv:...` y rompía el cruce con el manifiesto.
+fn identidad_sin_doi(source: &str, id: &str) -> String { if id.starts_with(&format!("{source}:")) { id.to_string() } else { format!("{source}:{id}") } }
 fn accepted_ids(path: &Path) -> Vec<String> { read_tsv(path).unwrap_or_default().into_iter().skip(1).filter(|row| row.get(4).map(String::as_str) == Some("accepted")).filter_map(|row| row.first().cloned()).collect() }
 
 /// `NotPdf` y `Unreadable` estaban juntos y son diagnósticos distintos: el
@@ -515,5 +535,47 @@ mod tests {
         assert!(!es_titulo_de_challenge(b"<title>Waiting: just a moment of history</title>"));
         assert!(!es_titulo_de_challenge(b"<p>Just a moment</p>"));
         assert!(!es_titulo_de_challenge(b""));
+    }
+
+    fn fila(celdas: &[&str]) -> Vec<String> { celdas.iter().map(|celda| celda.to_string()).collect() }
+
+    #[test]
+    fn la_identidad_no_repite_la_fuente() {
+        assert_eq!(identidad_sin_doi("arxiv", "arxiv:2610.23618v1"), "arxiv:2610.23618v1");
+        assert_eq!(identidad_sin_doi("openalex", "W123"), "openalex:W123");
+        assert_eq!(identidad_sin_doi("scielo", "scielo:chl:S1"), "scielo:chl:S1");
+    }
+
+    #[test]
+    fn migra_el_catalogo_de_17_columnas() {
+        let viejo = vec![fila(&CATALOG_HEADER_17), fila(&["doi:10.1/aaa", "W1", "T", "10.1/aaa", "2020", "", "", "", "", "", "", "", "", "openalex@1", "1", "relevante", "central"]), fila(&["arxiv:1", "1", "U"])];
+        let rows = migrar_catalogo(viejo).unwrap();
+        assert!(rows.iter().all(|row| row.len() == 19));
+        assert_eq!(rows[0], fila(&CATALOG_HEADER));
+        assert_eq!((rows[1][13].as_str(), rows[1][14].as_str(), rows[1][15].as_str()), ("", "", "openalex@1"));
+        assert_eq!((rows[1][17].as_str(), rows[1][18].as_str()), ("relevante", "central"));
+        assert!(migrar_catalogo(vec![fila(&["identity", "id", "title"])]).is_none());
+    }
+
+    #[test]
+    fn completa_las_filas_cortas_del_catalogo_de_19() {
+        let mut corta = fila(&CATALOG_HEADER);
+        corta.truncate(18);
+        corta[17] = "relevante".to_string();
+        let rows = migrar_catalogo(vec![fila(&CATALOG_HEADER), corta]).unwrap();
+        assert_eq!(rows[1].len(), 19);
+        assert_eq!((rows[1][17].as_str(), rows[1][18].as_str()), ("relevante", ""));
+    }
+
+    #[test]
+    fn la_fusion_conserva_la_decision_y_no_borra_con_vacios() {
+        let mut existente = fila(&["doi:10.1/aaa", "W1", "T", "10.1/aaa", "2020", "", "", "", "", "", "", "", "", "2020-03-15", "42", "openalex@1", "1", "relevante", "central"]);
+        let nuevos = fila(&["doi:10.1/aaa", "W1", "T2", "10.1/aaa", "2020", "", "", "", "", "", "", "", "", "", "50", "crossref@2", "2", "pendiente", ""]);
+        fusionar(&mut existente, nuevos, "crossref@2");
+        assert_eq!(existente[2], "T2");
+        assert_eq!((existente[13].as_str(), existente[14].as_str()), ("2020-03-15", "50"));
+        assert_eq!(existente[15], "openalex@1;crossref@2");
+        assert_eq!(existente[16], "1");
+        assert_eq!((existente[17].as_str(), existente[18].as_str()), ("relevante", "central"));
     }
 }

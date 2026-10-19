@@ -8,7 +8,7 @@ usa `/tmp` como almacenamiento final. Tiene una fila por obra descubierta y
 estas columnas, en este orden:
 
 ```text
-identity<TAB>id<TAB>title<TAB>doi<TAB>year<TAB>is_oa<TAB>oa_status<TAB>license<TAB>version<TAB>landing_url<TAB>pdf_url<TAB>pdf_urls<TAB>abstract<TAB>provenance<TAB>discovered_at<TAB>decision<TAB>decision_reason
+identity<TAB>id<TAB>title<TAB>doi<TAB>year<TAB>is_oa<TAB>oa_status<TAB>license<TAB>version<TAB>landing_url<TAB>pdf_url<TAB>pdf_urls<TAB>abstract<TAB>published<TAB>cited_by<TAB>provenance<TAB>discovered_at<TAB>decision<TAB>decision_reason
 ```
 
 `decision` solo puede ser `pendiente`, `relevante` o `descartado`. Las filas
@@ -18,19 +18,38 @@ no decide relevancia. `provenance` acumula valores `fuente@timestamp` separados
 por punto y coma, y `discovered_at` es el timestamp Unix de la primera
 incorporación de esa fila.
 
+`published` es la fecha de publicación en `YYYY-MM-DD`, `YYYY-MM` o `YYYY`,
+con la precisión que declare la fuente. `cited_by` es el conteo de citas como
+entero sin separadores, tal como lo informa la fuente en el momento de la
+consulta. Ambas pueden ir vacías: el scraper las emite con esos mismos nombres
+solo si la fuente trae el dato y no las deduce de `year` ni de otra fuente. Un
+conteo de citas depende de quién lo cuenta y de cuándo, así que sirve para
+ordenar dentro del catálogo, no como dato bibliográfico citable.
+
 La identidad se resuelve así:
 
 - Si hay DOI, se normaliza a minúsculas, quitando `https://doi.org/`,
   `http://doi.org/` o `doi:`, y se usa `doi:<valor>`. Por eso un trabajo con
   DOI visto en OpenAlex y arXiv comparte fila y acumula ambas procedencias.
-- Si no hay DOI, se usa `fuente:id` (`openalex:W...`, `arxiv:...`). Dos fuentes
+- Si no hay DOI, se usa `fuente:id` (`openalex:W...`, `arxiv:...`). Si el
+  scraper ya trae el `id` con ese prefijo, `buscar` no lo repite. Dos fuentes
   sin DOI no se fusionan automáticamente: el título, la URL o la semejanza
   textual no son una prueba suficiente. El agente puede reconciliar el caso
   explícitamente antes de marcar la fila.
 
-Una nueva observación actualiza los metadatos no vacíos de su identidad, pero
-conserva `decision` y `decision_reason`. El catálogo permite revisar y decidir
-sin descargar nada.
+Una nueva observación actualiza los metadatos no vacíos de su identidad,
+incluidos `published` y `cited_by`, pero conserva `decision` y
+`decision_reason`. Un valor vacío nunca borra uno ya registrado, así que el
+conteo de citas que queda es el de la última fuente que lo trajo. El catálogo
+permite revisar y decidir sin descargar nada.
+
+Un `catalogo.tsv` anterior, de 17 columnas sin `published` ni `cited_by`, se
+sigue leyendo: `buscar` le agrega en memoria esas dos columnas vacías y la
+siguiente escritura lo deja en el formato de 19. `descargar` lee el catálogo
+por nombre de columna y acepta ambos. Un encabezado que no sea ninguno de los
+dos es un error. Una fila con menos celdas que el encabezado, como la que
+pierde los tabuladores finales al editarse a mano, se completa con celdas
+vacías.
 
 ## `manifest.tsv`
 
