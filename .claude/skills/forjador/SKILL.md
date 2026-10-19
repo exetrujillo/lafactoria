@@ -30,6 +30,14 @@ una línea y seguir. Nada de esto bloquea la sesión.
 
 ## 1. Aclarar el propósito
 
+Si la skill ya existe y el pedido es refinarla o arreglarla, dueño de la
+fuente, raíz y alcance de instalación se heredan de lo que ya está
+(`cargo run --quiet -- instalaciones <nombre>` lo dice), y las preguntas de
+abajo se reducen a dos: si cambia el disparador (`description`) y si hace
+falta investigar o medir antes de tocar. Dilo así al usuario en vez de
+repetir la tanda entera. Lee además `vivencias/INDICE.md` de la skill que se
+refina, para que lo que ya aprendió pase al cuerpo en la misma edición.
+
 Antes de escribir nada, usa la herramienta disponible para hacer preguntas al usuario y
 resolver en una o varias rondas, dependiendo de si una pregunta pudiera depender de
 otra respuesta:
