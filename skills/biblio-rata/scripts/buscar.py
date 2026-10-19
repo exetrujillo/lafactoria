@@ -12,12 +12,13 @@ import argparse
 import re
 import sqlite3
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # no ensuciar caché
 sys.path.insert(0, str(Path(__file__).parent))
 import entorno as E
-from indexar import resolver_doc
+from indexar import reparto_idiomas, resolver_doc
 
 BLANCOS = re.compile(r"\s+")
 
@@ -74,14 +75,18 @@ def main(argv: list[str]) -> int:
         return 0
     con = sqlite3.connect(E.ruta_db(corpus))
     doc = resolver_doc(con, a.doc) if a.doc else None
-    filas, total = _buscar(con, a.consulta, a.n, doc, a.tokens)
+    consulta = unicodedata.normalize("NFKC", a.consulta)
+    filas, total = _buscar(con, consulta, a.n, doc, a.tokens)
+    reparto = reparto_idiomas(con)
+    idiomas = (" · idiomas del corpus: " + ", ".join(f"{i} {n}" for i, n in reparto)
+               if len(reparto) > 1 else "")
 
     if not filas:
-        print(f"sin resultados para: {a.consulta}")
+        print(f"sin resultados para: {a.consulta}{idiomas}")
         return 1
     for slug, pag, frag, puntaje in filas:
         print(f"{slug} p.{pag} · {puntaje:.2f} · {_una_linea(frag)}")
-    print(f"— {len(filas)} de {total} páginas con coincidencia")
+    print(f"— {len(filas)} de {total} páginas con coincidencia{idiomas}")
     return 0
 
 if __name__ == "__main__":

@@ -2,6 +2,22 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.18.0] - 2026-10-19
+
+### Agregado
+
+- **`biblio-rata` estima el idioma de cada documento y avisa cuando el corpus mezcla idiomas.** El índice no traduce, y en una biblioteca reunida con `pulpo-librero` el 27 % de las páginas estaba en español, así que una consulta en inglés no las veía. `indexar.py` cuenta palabras vacías de inglés, español, portugués, francés y alemán, solo las que pertenecen a un único idioma de la lista, y guarda el ganador en la columna nueva `doc.idioma`. Si ninguna lista llega al 3 % de las palabras del documento, guarda `?`. En cuatro bibliotecas reales separó 4 documentos en español, 1 en portugués y 1 en alemán de 137 en inglés. El alemán, con solo cuatro idiomas, salía inglés con 0,8 % de aciertos; el documento real más bajo quedó en 5,5 %. `--listar` muestra el idioma de cada documento y el reparto al pie. Si hay más de un idioma, la última línea de `buscar.py` agrega `idiomas del corpus: en 14, es 3`, también cuando no hay resultados, y el SKILL.md manda repetir cada consulta en cada idioma de la lista.
+
+### Cambiado
+
+- La sección "Idioma" de `consultas.md` dice lo medido sobre `porter` fuera del inglés. En español une el plural en `-s` y `-es` (`indicadores` encuentra `indicador`) pero no el género (`indicador` no encuentra `indicadora`), y en portugués no une `-ção` con `-ções`. Ahí conviene un prefijo corto (`indicad*`, `avalia*`), y la regla de no usar prefijos queda acotada al inglés. Ya no atribuye al SKILL.md una pregunta al usuario que el SKILL.md no hacía.
+
+### Corregido
+
+- **`biblio-rata` normaliza el texto con NFKC al indexar y sobre la consulta.** FTS5 con `unicode61` no descompone las ligaduras, así que `classiﬁcation` no encontraba `classification`. Las ligaduras están en el 4 al 21 % de las páginas de esas bibliotecas, y también hay letras matemáticas en cursiva, `ℓ` y `µ`. Reindexada con el código nuevo, la más grande pasa de 174 a 189 páginas para `classification`, de 146 a 164 para `significant`, de 144 a 165 para `definition` y de 86 a 105 para `field`, y la consulta escrita con la ligadura encuentra lo mismo. El costo es que `pagina.py` muestra el texto normalizado (`x²` sale `x2`, `½` sale `1⁄2`), cosa que pasa en el 1,1 % de las páginas o menos. `consultas.md` lo advierte.
+- El guion blando U+00AD al final de línea se pega igual que el guion, y los que quedan sueltos se borran. Salía en 25 páginas de una de ellas (`correla` + U+00AD + salto). Los pedazos dejan de indexarse (`correla` pasa de 3 páginas a 0), aunque casi no suman páginas, porque esas páginas ya traían la palabra entera en otra parte.
+- El esquema del índice sube a 4 y la migración rehace las tablas con `DROP` en vez de vaciarlas, porque `CREATE TABLE IF NOT EXISTS` no agrega la columna nueva. También las rehace en un índice viejo sin documentos, que la condición anterior se saltaba y que con la columna nueva habría roto el primer `INSERT`. `indexar.py --listar` sobre un índice viejo pide correr `indexar.py` en vez de fallar en el `SELECT`. Cada índice existente se reindexa solo en su primera búsqueda.
+
 ## [2.17.1] - 2026-10-19
 
 ### Corregido

@@ -13,6 +13,13 @@ CREATE VIRTUAL TABLE pagina USING fts5(
   ni conjugar a mano.
 - **`remove_diacritics 2`**: los acentos se ignoran. `medicion` encuentra
   `medición`. Sirve para no pelear con el teclado.
+- **NFKC**: antes de indexar, y también sobre la consulta, el texto pasa por la
+  normalización NFKC de Unicode. Las ligaduras de los PDF (`ﬁ`, `ﬀ`, `ﬂ`)
+  quedan como letras sueltas, y lo mismo las letras matemáticas en cursiva,
+  `ℓ` y `µ`. Sin eso `classification` no encontraba `classiﬁcation`. El precio
+  es que `pagina.py` muestra el texto normalizado: `x²` sale `x2` y `½` sale
+  `1⁄2`. Ten presente que una cifra con exponente o fracción puede haber
+  perdido su forma antes de citarla textual.
 - **`slug` y `pag` van sin indexar**: no se puede filtrar por documento con la
   sintaxis de columnas de FTS5. Para eso está `--doc` en `buscar.py`, que
   acepta el slug entero, su último componente o un prefijo inequívoco de
@@ -44,9 +51,9 @@ candid*     -> encuentra
 halv*       -> encuentra
 ```
 
-Regla práctica: **no uses prefijos**. El *stemming* ya cubre plurales y
-derivados, que es para lo que uno los usaría. Si aun así los necesitas, corta
-corto.
+Regla práctica en inglés: **no uses prefijos**. El *stemming* ya cubre plurales
+y derivados, que es para lo que uno los usaría. Si aun así los necesitas, corta
+corto. En otros idiomas es al revés (ver "Idioma").
 
 **2. `NEAR` no admite `^` adentro.** `NEAR(^one, two)` es error de sintaxis.
 Si una consulta da error, el script lo dice y no rompe nada: reformula.
@@ -57,8 +64,8 @@ quita el signo, reformula la consulta o pon la frase literal entre comillas.
 Los operadores solo deben escribirse a propósito; el buscador no modifica la
 consulta automáticamente.
 
-Al indexar se pegan las palabras cortadas con guion al final de línea
-(`succes-` / `sive` queda `successive`). El precio es que un compuesto legítimo
+Al indexar se pegan las palabras cortadas al final de línea con guion o con
+guion blando, U+00AD (`succes-` / `sive` queda `successive`). El precio es que un compuesto legítimo
 cortado justo ahí pierde el guion: `state-of-the-` / `art` queda
 `state-of-theart`. Si un término compuesto no aparece, prueba también la forma
 pegada o sus partes con `OR`.
@@ -88,19 +95,27 @@ buscar.py "(holdout OR validation) adaptive"
 
 ## Idioma
 
-**Se consulta en el idioma del corpus**, porque el índice guarda las palabras
-tal como están escritas y no traduce nada. Si el corpus está en inglés, buscar
-en español no devuelve nada, salvo por las notas que hayas escrito tú.
+**Se consulta en el idioma de cada documento**, porque el índice guarda las
+palabras tal como están escritas y no traduce nada. Al indexar se estima el
+idioma de cada documento contando palabras vacías de inglés, español,
+portugués, francés y alemán. `--listar` lo muestra por documento, con el
+reparto al pie. Si hay más de uno, `buscar.py` lo agrega a su última línea:
 
-`--listar` muestra los títulos, que suelen bastar para saber en qué idioma está.
-Cuando el corpus no está ni en inglés ni en español, el `SKILL.md` manda
-preguntarle al usuario en qué idioma consultar antes de seguir.
+```
+— 8 de 120 páginas con coincidencia · idiomas del corpus: en 14, es 3
+```
 
-Un detalle del *stemming*: `porter` implementa reglas del **inglés**. En otros
-idiomas no rompe nada —se aplica igual al indexar y al consultar, así que las
-coincidencias exactas siguen funcionando— pero no unifica singular con plural ni
-las formas conjugadas. En un corpus que no sea inglés conviene probar con más de
-una forma de la palabra, o usar un prefijo corto.
+Con ese aviso, repite la consulta en cada idioma, con los términos de esa
+literatura. `?` quiere decir que ninguna lista llegó al 3 % de las palabras del
+documento, porque está en otro idioma o tiene muy poco texto.
+
+El *stemming* de `porter` implementa reglas del **inglés**. En español une el
+plural en `-s` y `-es` (`indicadores` encuentra `indicador`, `políticas`
+encuentra `política`), pero no el género (`indicador` no encuentra
+`indicadora`, ni `público` a `pública`). En portugués no une `-ção` con `-ções`
+(`avaliação` no encuentra `avaliações`). Ahí sirve lo que en inglés conviene
+evitar, un prefijo corto: `indicad*`, `public*` y `avalia*` encuentran todas las
+formas. Los acentos dan igual también en el prefijo.
 
 ## Cómo leer la salida
 
@@ -114,7 +129,8 @@ en una subcarpeta, sale con ella: `bandits/li-2018-hyperband p.6`.
 
 BM25 es negativo por convención: **más negativo es mejor**, y los resultados ya
 vienen ordenados. La última línea dice cuántas páginas coincidieron en total; si
-son muchas, conviene afinar antes de leer.
+son muchas, conviene afinar antes de leer. Si el corpus mezcla idiomas, también
+dice cuáles (ver "Idioma").
 
 `--tokens` controla el largo del fragmento. La documentación de SQLite declara
 el rango 1–64; valores mayores funcionan en esta build pero no son portables, así

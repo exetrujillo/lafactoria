@@ -55,6 +55,16 @@ prefijo de cualquiera de los dos si es inequívoco), `--tokens` para alargar el
 fragmento, `--listar` para ver qué documentos hay. Para sintaxis FTS5
 compleja, lee `references/consultas.md` antes de buscar.
 
+**Idioma.** El índice no traduce, así que una consulta en inglés no encuentra
+un PDF en español. Si el corpus tiene documentos en más de un idioma, la última
+línea de `buscar.py` termina con `idiomas del corpus: en 14, es 3`. En ese caso
+repite cada consulta en cada idioma de la lista, con el vocabulario propio de
+esa literatura y no una traducción palabra por palabra. Un `?` es un documento
+cuyo idioma no se pudo estimar, porque está en otro idioma o tiene poco texto.
+Su ficha (`pagina.py SLUG --ficha`) o su página 1 lo aclaran. Fuera del inglés
+el *stemming* une menos formas de cada palabra, y `references/consultas.md`
+dice cómo compensarlo.
+
 **3. Leer la página exacta solo si el fragmento no alcanza:**
 
 ```sh
@@ -88,7 +98,7 @@ devuelve la página.
 ```sh
 python3 $SK/scripts/indexar.py            # incremental, sin buscar: lo nuevo o cambiado, y borra lo que ya no está
 python3 $SK/scripts/indexar.py --rehacer  # reconstruye desde cero
-python3 $SK/scripts/indexar.py --listar   # documentos, páginas y títulos
+python3 $SK/scripts/indexar.py --listar   # documentos, idioma, páginas y títulos
 python3 $SK/scripts/entorno.py            # qué detectó de esta máquina
 ```
 

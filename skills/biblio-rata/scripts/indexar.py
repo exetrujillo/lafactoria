@@ -20,6 +20,8 @@ import sqlite3
 import subprocess
 import sys
 import time
+import unicodedata
+from collections import Counter
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -27,23 +29,49 @@ sys.path.insert(0, str(Path(__file__).parent))
 import entorno as E
 
 UMBRAL_DENSIDAD = 200
-ESQUEMA_VERSION = "3"
-GUION_FIN_DE_LINEA = re.compile(r"(\w)-\n(\w)")
+ESQUEMA_VERSION = "4"
+GUION_FIN_DE_LINEA = re.compile(r"(\w)[-\u00ad]\n(\w)")
+PALABRA = re.compile(r"\w+")
+UMBRAL_IDIOMA = 0.03
+# Solo palabras de un único idioma de la lista: "et" (et al.), "que" o "das"
+# sumarían en dos a la vez.
+PALABRAS_VACIAS = {
+    "en": set("the and of to is that with are this from which by was were "
+              "have has be it not".split()),
+    "es": set("el los las del y con una su sus lo más pero muy también fue "
+              "hay".split()),
+    "pt": set("os da em não uma com é ao pelo pela são foi na seu sua".split()),
+    "fr": set("les des du est une dans pour pas qui sur au aux ce il sont "
+              "avec cette été".split()),
+    "de": set("der die und ist nicht ein eine mit von zu den im auf für sich "
+              "dem werden".split()),
+}
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS meta(clave TEXT PRIMARY KEY, valor TEXT);
 CREATE TABLE IF NOT EXISTS doc(
   slug TEXT PRIMARY KEY, ruta TEXT NOT NULL, titulo TEXT, autor TEXT,
-  paginas INTEGER, mtime REAL, tam INTEGER, toc TEXT);
+  paginas INTEGER, mtime REAL, tam INTEGER, toc TEXT, idioma TEXT);
 CREATE VIRTUAL TABLE IF NOT EXISTS pagina USING fts5(
   slug UNINDEXED, pag UNINDEXED, texto,
   tokenize = "porter unicode61 remove_diacritics 2");
 """
 
-def _unir_guiones(texto: str) -> str:
-    """Pega las palabras cortadas con guion al final de línea. Se pierde el
+def _limpiar(texto: str) -> str:
+    """NFKC, porque unicode61 no descompone ligaduras como ﬁ, y pega las
+    palabras cortadas con guion o guion blando al final de línea. Se pierde el
     guion de un compuesto legítimo que cayó justo ahí; se asume a propósito."""
-    return GUION_FIN_DE_LINEA.sub(r"\1\2", texto)
+    texto = unicodedata.normalize("NFKC", texto)
+    return GUION_FIN_DE_LINEA.sub(r"\1\2", texto).replace("\u00ad", "")
+
+def _idioma(paginas: list[str]) -> str:
+    cuenta = Counter(PALABRA.findall("\n".join(paginas).lower()))
+    aciertos = {idioma: sum(cuenta[p] for p in vacias)
+                for idioma, vacias in PALABRAS_VACIAS.items()}
+    ganador = max(aciertos, key=aciertos.get)
+    if aciertos[ganador] < UMBRAL_IDIOMA * sum(cuenta.values()):
+        return "?"
+    return ganador
 
 def _partir_en_paginas(texto: str) -> list[str]:
     partes = texto.split("\f")
@@ -142,17 +170,27 @@ def resolver_doc(con: sqlite3.Connection, doc: str) -> str:
             raise SystemExit(f"error: '{doc}' es ambiguo: {', '.join(cands)}")
     raise SystemExit(f"error: ningún documento coincide con '{doc}'")
 
+def reparto_idiomas(con: sqlite3.Connection) -> list[tuple[str, int]]:
+    return con.execute(
+        "SELECT idioma, count(*) FROM doc GROUP BY idioma "
+        "ORDER BY count(*) DESC, idioma").fetchall()
+
 def listar(corpus: Path) -> None:
     db = E.ruta_db(corpus)
     if not db.is_file():
         raise SystemExit(f"error: no hay índice en {db}; corre indexar.py primero")
     con = sqlite3.connect(db)
+    if leer_meta(con, "esquema") != ESQUEMA_VERSION:
+        raise SystemExit("error: el índice es de una versión anterior del "
+                         "esquema; corre indexar.py")
     filas = con.execute(
-        "SELECT slug, paginas, titulo FROM doc ORDER BY slug").fetchall()
+        "SELECT slug, idioma, paginas, titulo FROM doc ORDER BY slug").fetchall()
     ancho = max((len(f[0]) for f in filas), default=52)
-    for slug, pags, titulo in filas:
-        print(f"{slug:<{ancho}} {pags:>5} p.  {(titulo or '')[:40]}")
-    print(f"\n{len(filas)} documentos · {sum(f[1] or 0 for f in filas)} páginas")
+    for slug, idioma, pags, titulo in filas:
+        print(f"{slug:<{ancho}} {idioma:<2} {pags:>5} p.  {(titulo or '')[:40]}")
+    idiomas = ", ".join(f"{i} {n}" for i, n in reparto_idiomas(con))
+    print(f"\n{len(filas)} documentos · {sum(f[2] or 0 for f in filas)} páginas"
+          + (f" · {idiomas}" if idiomas else ""))
 
 def indexar(corpus: Path, rehacer: bool = False, out=sys.stdout) -> dict:
     env = E.cargar()
@@ -163,10 +201,14 @@ def indexar(corpus: Path, rehacer: bool = False, out=sys.stdout) -> dict:
               f"reindexando todo", file=out)
         rehacer = True
     hay_docs = con.execute("SELECT 1 FROM doc LIMIT 1").fetchone() is not None
-    if hay_docs and leer_meta(con, "esquema") != ESQUEMA_VERSION:
-        print("aviso: el índice es de una versión anterior del esquema; "
-              "reindexando todo", file=out)
-        rehacer = True
+    if leer_meta(con, "esquema") != ESQUEMA_VERSION:
+        if hay_docs:
+            print("aviso: el índice es de una versión anterior del esquema; "
+                  "reindexando todo", file=out)
+            rehacer = True
+        # IF NOT EXISTS no agrega columnas nuevas, tampoco a un índice viejo
+        # sin documentos, así que las tablas se rehacen siempre.
+        con.executescript("DROP TABLE doc; DROP TABLE pagina;" + ESQUEMA)
     if rehacer:
         con.execute("DELETE FROM pagina")
         con.execute("DELETE FROM doc")
@@ -194,7 +236,7 @@ def indexar(corpus: Path, rehacer: bool = False, out=sys.stdout) -> dict:
             continue
 
         paginas, info = extraer(ruta, env["extractor"])
-        paginas = [_unir_guiones(p) for p in paginas]
+        paginas = [_limpiar(p) for p in paginas]
         if not any(p.strip() for p in paginas):
             print(f"aviso: '{slug}' no dio texto (¿PDF escaneado sin OCR?), se omite",
                   file=out)
@@ -210,10 +252,10 @@ def indexar(corpus: Path, rehacer: bool = False, out=sys.stdout) -> dict:
             "INSERT INTO pagina(slug, pag, texto) VALUES (?,?,?)",
             [(slug, i + 1, t) for i, t in enumerate(paginas)])
         con.execute(
-            "INSERT INTO doc(slug, ruta, titulo, autor, paginas, mtime, tam, toc)"
-            " VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO doc(slug, ruta, titulo, autor, paginas, mtime, tam, toc,"
+            " idioma) VALUES (?,?,?,?,?,?,?,?,?)",
             (slug, str(ruta), info["titulo"], info["autor"], len(paginas),
-             st.st_mtime, st.st_size, info["toc"]))
+             st.st_mtime, st.st_size, info["toc"], _idioma(paginas)))
         nuevos += 1
         paginas_tot += len(paginas)
         print(f"  + {slug:<56} {len(paginas):>5} p.", file=out)
