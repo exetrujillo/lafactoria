@@ -38,9 +38,10 @@ Una ubicación registrada no garantiza que el archivo sea descargable. La
 documentación de referencia es
 `https://docs.openalex.org/how-to-use-the-api/api-overview`.
 
-El sondeo del 2026-09-01 confirmó que esta API es el nivel 0 y no necesita
-correo ni credencial: `200` con `User-Agent` identificable, sin cookies ni
-navegador. Tres cosas que sí cambian cómo se la lee:
+El sondeo del 2026-09-01 confirmó que esta API es el nivel 0, con `200` para
+un `User-Agent` identificable, sin cookies ni navegador. Hoy cobra cada consulta
+en créditos diarios, y sin clave el cupo no alcanza para una corrida (ver "Cupo
+y clave", más abajo). Tres cosas que sí cambian cómo se la lee:
 
 - **Los campos de acceso abierto viven en `open_access` y `best_oa_location`,
   no sueltos en la obra.** Buscarlos por nombre sobre la respuesta entera
@@ -54,8 +55,11 @@ navegador. Tres cosas que sí cambian cómo se la lee:
   credencial. La regla de esta sección sigue en pie: OpenAlex descubre, no
   entrega archivos.
 - **El filtro acepta varios DOI por pedido** separándolos con `|`
-  (`filter=doi:a|b|c`), hasta 50. Verificado con tres DOI en una sola consulta.
-  Es lo que hace barato resolver las ubicaciones de un catálogo entero.
+  (`filter=doi:a|b|c`), hasta 100. Verificado con 100 DOI en una sola consulta
+  el 2026-10-19. Un DOI puede devolver dos obras (fueron 101 para 100 DOI), así
+  que `per-page` va en 200 y no en el tamaño de la tanda, o la obra que sobra
+  deja fuera a otro DOI. Es lo que hace barato resolver las ubicaciones de un
+  catálogo entero.
 
 `abstract_inverted_index` sigue presente, así que el abstract se reconstruye
 ordenando las posiciones de cada palabra. La respuesta ahora trae también
@@ -88,6 +92,35 @@ ahora `published` (`publication_date`) y `cited_by` (`cited_by_count`).
   obra sin DOI queda `openalex:W...` como dice el contrato. Una fila vieja que
   tenga la URL en el id no se fusiona con la nueva.
 
+### Cupo y clave
+
+Medido el 2026-10-19. OpenAlex mide el uso en créditos diarios que se renuevan a
+medianoche UTC, y `x-ratelimit-reset` da los segundos que faltan. Una búsqueda
+cuesta 10 créditos y una consulta por filtro de DOI cuesta 1, lleve 100 DOI o
+uno. Sin clave el cupo es de 1000 créditos por IP de salida. Una corrida lo
+agotó tras unas 67 búsquedas, y si la IP de salida es compartida puede estar
+gastado antes de empezar. Una clave gratuita da 10.000 créditos a la
+persona que la pidió.
+
+- La clave va como `Authorization: Bearer`, que según la documentación equivale
+  a `api_key=` en la URL. El adaptador usa la cabecera y la pasa por
+  `curl --config -`, para que no quede en la línea de comandos.
+- `x-ratelimit-remaining` y `x-ratelimit-limit` vienen en créditos (`9998` de
+  `10000`). Hay otras en dólares (`x-ratelimit-remaining-usd`) que el adaptador
+  no usa.
+- Una clave inexistente da `401` con un JSON `{"error", "message"}`, y una sin
+  activar da `403 key_not_activated`. En los dos casos el adaptador avisa y
+  repite la consulta sin clave.
+- La clave se pide con `POST https://api.openalex.org/api-keys` y
+  `{"email": ...}`. Responde `201` con `api_key` y `status:
+  pending_activation`, y la clave sirve cuando se abre el enlace del correo,
+  que vence en 7 días. Un correo mal formado da `400` (medido), uno con cuenta
+  `409 account_exists` y uno con una clave pendiente `409 activation_pending`.
+  Ese `POST` no se reintenta, porque repetido puede crear dos claves.
+- Según la documentación, sin clave solo sirve la primera página. La clave
+  habilita el paginado por cursor, que el adaptador no usa porque `search` trae
+  hasta 200 obras por llamada.
+
 ## El puente DOI → PDF
 
 Descubrir una obra y encontrarle una copia abierta son dos preguntas distintas.
@@ -100,7 +133,7 @@ razón medida: el 2026-09-01 su API devolvió `422` con el mensaje `"Please use
 your own email address in API calls"`. El parámetro `email` es obligatorio en
 toda llamada y rechaza los dominios de relleno, así que cada corrida exigiría un
 correo real de quien la ejecuta. OpenAlex ingiere los mismos datos de Unpaywall
-y responde sin credencial, a cambio de algo de frescura. Si alguna vez la
+y no exige correo, a cambio de algo de frescura. Si alguna vez la
 diferencia de actualización importa para un corpus concreto, la salida se puede
 volver a resolver contra Unpaywall sin cambiar el contrato del catálogo: lo que
 vuelve es un TSV con las mismas columnas.

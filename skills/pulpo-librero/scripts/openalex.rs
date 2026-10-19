@@ -4,6 +4,8 @@
 use std::env;
 use std::fs;
 use std::io::Write;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -19,14 +21,15 @@ const CAMPOS: &str = "id,doi,title,display_name,publication_year,publication_dat
 // La regla de la skill: al menos 3 s entre dos peticiones al mismo host.
 const PAUSA_SEGUNDOS: u64 = 3;
 
-// OpenAlex acepta hasta 50 DOI por consulta separados con '|'.
-const DOIS_POR_TANDA: usize = 50;
+// OpenAlex acepta hasta 100 valores por filtro separados con '|'.
+const DOIS_POR_TANDA: usize = 100;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("search") => run_search(&args),
         Some("resolver") => run_resolver(&args[2..]),
+        Some("pedir-clave") => run_pedir_clave(&args[2..]),
         _ => usage(),
     }
 }
@@ -34,7 +37,11 @@ fn main() {
 fn usage() -> ! {
     eprintln!("uso: openalex search --query TEXTO --out RESULTADOS.tsv [--title] [--per-page N] [--mailto EMAIL]");
     eprintln!("                    [--desde YYYY-MM-DD] [--orden citas|fecha|relevancia] [--tipo article|preprint|...] [--min-citas N]");
+    eprintln!("                    [--clave-archivo RUTA]");
     eprintln!("     openalex resolver --catalogo CATALOGO.tsv --out RESULTADOS.tsv [--solo-relevante] [--max N] [--mailto EMAIL]");
+    eprintln!("                    [--clave-archivo RUTA]");
+    eprintln!("     openalex pedir-clave --email CORREO --guardar RUTA");
+    eprintln!("sin --clave-archivo, la clave sale de OPENALEX_API_KEY si está definida");
     std::process::exit(2);
 }
 
@@ -51,6 +58,7 @@ fn run_search(args: &[String]) {
     let mut orden = "relevancia".to_string();
     let mut tipo = None;
     let mut min_citas = 0u64;
+    let mut clave_archivo = None;
     let mut i = 2;
     while i < args.len() {
         match args[i].as_str() {
@@ -72,6 +80,7 @@ fn run_search(args: &[String]) {
                 min_citas = args[i + 1].parse().unwrap_or_else(|_| { eprintln!("error: --min-citas no es entero"); std::process::exit(2); });
                 i += 2;
             }
+            "--clave-archivo" if i + 1 < args.len() => { clave_archivo = Some(args[i + 1].clone()); i += 2; }
             _ => { eprintln!("argumento desconocido: {}", args[i]); std::process::exit(2); }
         }
     }
@@ -117,9 +126,10 @@ fn run_search(args: &[String]) {
     if let Some(sort) = sort { url.push_str("&sort="); url.push_str(sort); }
     url.push_str("&select="); url.push_str(CAMPOS);
     if let Some(email) = mailto { url.push_str("&mailto="); url.push_str(&encode(&email)); }
+    let mut clave = cargar_clave(clave_archivo.as_deref()).unwrap_or_else(|err| { eprintln!("error: {err}"); std::process::exit(1); });
     let raw_path = format!("{out}.raw.json");
-    let raw = match consultar(&url, &raw_path) {
-        Ok(raw) => raw,
+    let (raw, cupo) = match consultar(&url, &raw_path, &mut clave) {
+        Ok(respuesta) => respuesta,
         Err(err) => { eprintln!("error: {err}"); std::process::exit(1); }
     };
     let results = match json_array(&raw, "results") {
@@ -135,7 +145,7 @@ fn run_search(args: &[String]) {
             count += 1;
         }
     }
-    println!("openalex: {count} obras extraídas; crudo={raw_path}; resultados={out}");
+    println!("openalex: {count} obras extraídas; {}; crudo={raw_path}; resultados={out}", resumen_cupo(&clave, &cupo));
 }
 
 // El puente entre el catálogo de descubrimiento y la descarga: toma los DOI
@@ -149,6 +159,7 @@ fn run_resolver(args: &[String]) {
     let mut mailto = None;
     let mut max = 200usize;
     let mut solo_relevante = false;
+    let mut clave_archivo = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -160,11 +171,13 @@ fn run_resolver(args: &[String]) {
                 i += 2;
             }
             "--solo-relevante" => { solo_relevante = true; i += 1; }
+            "--clave-archivo" if i + 1 < args.len() => { clave_archivo = Some(args[i + 1].clone()); i += 2; }
             _ => { eprintln!("argumento desconocido: {}", args[i]); std::process::exit(2); }
         }
     }
     let catalogo = catalogo.unwrap_or_else(|| { eprintln!("error: falta --catalogo"); std::process::exit(2); });
     let out = out.unwrap_or_else(|| { eprintln!("error: falta --out"); std::process::exit(2); });
+    let mut clave = cargar_clave(clave_archivo.as_deref()).unwrap_or_else(|err| { eprintln!("error: {err}"); std::process::exit(1); });
     let pendientes = match dois_pendientes(&catalogo, solo_relevante, max) {
         Ok(pendientes) => pendientes,
         Err(err) => { eprintln!("error: {err}"); std::process::exit(1); }
@@ -179,13 +192,16 @@ fn run_resolver(args: &[String]) {
     let mut resueltos: Vec<String> = Vec::new();
     let mut con_pdf = 0;
     let mut tandas = 0;
+    let mut cupo = None;
     for tanda in pendientes.chunks(DOIS_POR_TANDA) {
         let filtro = tanda.iter().map(|doi| encode(doi)).collect::<Vec<_>>().join("%7C");
-        let mut url = format!("https://api.openalex.org/works?filter=doi:{filtro}&per-page={DOIS_POR_TANDA}");
+        // Un DOI puede devolver dos obras, y con per-page igual a la tanda la que
+        // sobra dejaba fuera a otro DOI (101 obras para 100 DOI el 2026-10-19).
+        let mut url = format!("https://api.openalex.org/works?filter=doi:{filtro}&per-page=200");
         if let Some(email) = &mailto { url.push_str("&mailto="); url.push_str(&encode(email)); }
         let parcial = format!("{out}.raw.part");
-        let raw = match consultar(&url, &parcial) {
-            Ok(raw) => raw,
+        let raw = match consultar(&url, &parcial, &mut clave) {
+            Ok((raw, restante)) => { cupo = restante; raw }
             Err(err) => { eprintln!("error: {err}"); std::process::exit(1); }
         };
         tandas += 1;
@@ -200,7 +216,10 @@ fn run_resolver(args: &[String]) {
         };
         for obra in json_entries(results) {
             let Some(fila) = fila_tsv(obra) else { continue };
-            resueltos.push(normalizar_doi(&json_string(obra, "doi").unwrap_or_default()));
+            let doi = normalizar_doi(&json_string(obra, "doi").unwrap_or_default());
+            if !resueltos.contains(&doi) {
+                resueltos.push(doi);
+            }
             if !fila.split('\t').nth(9).unwrap_or("").is_empty() {
                 con_pdf += 1;
             }
@@ -209,9 +228,10 @@ fn run_resolver(args: &[String]) {
     }
     let sin_respuesta: Vec<&String> = pendientes.iter().filter(|doi| !resueltos.contains(doi)).collect();
     println!(
-        "openalex resolver: {} DOI consultados en {tandas} tanda(s); {} con respuesta; {con_pdf} con pdf_url; crudo={raw_path}; resultados={out}",
+        "openalex resolver: {} DOI consultados en {tandas} tanda(s); {} con respuesta; {con_pdf} con pdf_url; {}; crudo={raw_path}; resultados={out}",
         pendientes.len(),
-        resueltos.len()
+        resueltos.len(),
+        resumen_cupo(&clave, &cupo)
     );
     if !sin_respuesta.is_empty() {
         let muestra: Vec<&str> = sin_respuesta.iter().take(10).map(|doi| doi.as_str()).collect();
@@ -248,38 +268,174 @@ fn dois_pendientes(catalogo: &str, solo_relevante: bool, max: usize) -> Result<V
     Ok(dois)
 }
 
-fn consultar(url: &str, destino: &str) -> Result<String, String> {
-    let result = Command::new("curl")
-        .args(["--fail", "--location", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--retry-max-time", "120", "--connect-timeout", "20", "--max-time", "60", "--user-agent", "pulpo-librero/0.1", "--write-out", "%{http_code} %header{retry-after}", "--output"])
-        .arg(destino)
-        .arg(url)
-        .stderr(Stdio::inherit())
-        .output();
-    thread::sleep(Duration::from_secs(PAUSA_SEGUNDOS));
-    match result {
-        Err(err) => return Err(format!("no se pudo ejecutar curl: {err}")),
-        Ok(salida) if !salida.status.success() => return Err(motivo_del_fallo(&String::from_utf8_lossy(&salida.stdout))),
-        Ok(_) => {}
+// La clave va a curl por stdin con --config: en la URL o en un argumento la
+// vería cualquiera con ps. Los campos del --write-out van separados por tab
+// porque una cabecera ausente deja el campo vacío.
+fn consultar(url: &str, destino: &str, clave: &mut Option<String>) -> Result<(String, Option<String>), String> {
+    loop {
+        let mut comando = Command::new("curl");
+        comando
+            .args(["--fail", "--location", "--silent", "--show-error", "--retry", "2", "--retry-delay", "3", "--retry-max-time", "120", "--connect-timeout", "20", "--max-time", "60", "--user-agent", "pulpo-librero/0.1", "--write-out", "%{http_code}\t%header{retry-after}\t%header{x-ratelimit-remaining}\t%header{x-ratelimit-limit}", "--output"])
+            .arg(destino)
+            .arg(url)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit());
+        if clave.is_some() {
+            comando.args(["--config", "-"]).stdin(Stdio::piped());
+        }
+        let result = comando.spawn().and_then(|mut hijo| {
+            if let Some(valor) = clave.as_deref() {
+                let mut entrada = hijo.stdin.take().expect("stdin con pipe");
+                writeln!(entrada, "header = \"Authorization: Bearer {valor}\"")?;
+            }
+            hijo.wait_with_output()
+        });
+        thread::sleep(Duration::from_secs(PAUSA_SEGUNDOS));
+        let salida = result.map_err(|err| format!("no se pudo ejecutar curl: {err}"))?;
+        let write_out = String::from_utf8_lossy(&salida.stdout).to_string();
+        if !salida.status.success() {
+            let status = write_out.split('\t').next().unwrap_or("");
+            if clave.is_some() && (status == "401" || status == "403") {
+                let causa = if status == "401" { "no existe o está mal copiada" } else { "si es nueva, falta abrir el enlace de activación del correo" };
+                eprintln!("advertencia: OpenAlex rechazó la clave (HTTP {status}): {causa}; sigo sin clave");
+                *clave = None;
+                continue;
+            }
+            return Err(motivo_del_fallo(&write_out));
+        }
+        let raw = fs::read_to_string(destino).map_err(|err| format!("no se pudo leer {destino}: {err}"))?;
+        return Ok((raw, cupo(&write_out)));
     }
-    fs::read_to_string(destino).map_err(|err| format!("no se pudo leer {destino}: {err}"))
+}
+
+fn cupo(write_out: &str) -> Option<String> {
+    let campos: Vec<&str> = write_out.split('\t').map(str::trim).collect();
+    let quedan = campos.get(2).filter(|valor| !valor.is_empty())?;
+    let total = campos.get(3).filter(|valor| !valor.is_empty())?;
+    Some(format!("quedan {quedan} de {total} créditos"))
+}
+
+fn resumen_cupo(clave: &Option<String>, cupo: &Option<String>) -> String {
+    let modo = if clave.is_some() { "con clave" } else { "sin clave" };
+    match cupo {
+        Some(cupo) => format!("{modo}, {cupo}"),
+        None => modo.to_string(),
+    }
 }
 
 // curl no espera un Retry-After de más de 120 s (--retry-max-time), así que un
 // 429 que pide más es el cupo diario, que dura hasta la medianoche UTC, y no
 // el límite por segundo.
 fn motivo_del_fallo(write_out: &str) -> String {
-    let mut partes = write_out.split_whitespace();
-    let status = partes.next().unwrap_or("000");
+    let mut campos = write_out.split('\t').map(str::trim);
+    let status = campos.next().filter(|valor| !valor.is_empty()).unwrap_or("000");
     if status != "429" {
         return format!("OpenAlex no respondió correctamente (HTTP {status})");
     }
-    match partes.next().and_then(|valor| valor.parse::<u64>().ok()) {
+    let restante = cupo(write_out);
+    match campos.next().and_then(|valor| valor.parse::<u64>().ok()) {
         Some(segundos) if segundos > 120 => {
             let falta = if segundos >= 3600 { format!("unas {} h", (segundos + 1800) / 3600) } else { format!("unos {} min", (segundos + 59) / 60) };
-            format!("OpenAlex respondió 429: se agotó el cupo diario y vuelve en {falta}; no reintentes antes")
+            let restante = restante.map(|valor| format!(" ({valor})")).unwrap_or_default();
+            format!("OpenAlex respondió 429: se agotó el cupo diario{restante} y vuelve en {falta}; no reintentes antes")
         }
-        _ => "OpenAlex respondió 429 (límite de peticiones); espera un minuto antes de reintentar".to_string(),
+        _ => {
+            let restante = restante.map(|valor| format!("; {valor}")).unwrap_or_default();
+            format!("OpenAlex respondió 429 (límite de peticiones{restante}); espera un minuto antes de reintentar")
+        }
     }
+}
+
+// En una máquina compartida, una clave que el grupo u otros pueden leer ya
+// está expuesta. Ningún mensaje muestra la clave.
+fn cargar_clave(archivo: Option<&str>) -> Result<Option<String>, String> {
+    let clave = match archivo {
+        Some(ruta) => {
+            let modo = fs::metadata(ruta).map_err(|err| format!("no se pudo leer la clave de OpenAlex en {ruta}: {err}"))?.permissions().mode();
+            if modo & 0o077 != 0 {
+                return Err(format!("{ruta} tiene permisos {:o} y otros usuarios pueden leer la clave; corre chmod 600 {ruta}", modo & 0o777));
+            }
+            fs::read_to_string(ruta).map_err(|err| format!("no se pudo leer la clave de OpenAlex en {ruta}: {err}"))?.trim().to_string()
+        }
+        None => match env::var("OPENALEX_API_KEY") {
+            Ok(valor) if !valor.trim().is_empty() => valor.trim().to_string(),
+            _ => return Ok(None),
+        },
+    };
+    if !clave_valida(&clave) {
+        return Err("la clave de OpenAlex trae caracteres que una clave no tiene".to_string());
+    }
+    Ok(Some(clave))
+}
+
+// Además de descartar un archivo equivocado, impide que la clave rompa la
+// sintaxis de --config.
+fn clave_valida(clave: &str) -> bool {
+    !clave.is_empty() && clave.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
+// Sin --fail, para leer el error que explica un 409, y sin --retry, porque un
+// POST repetido puede crear dos claves. La respuesta trae la clave: queda en
+// memoria y solo se escribe en el archivo de destino.
+fn run_pedir_clave(args: &[String]) {
+    let mut email = None;
+    let mut guardar = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--email" if i + 1 < args.len() => { email = Some(args[i + 1].clone()); i += 2; }
+            "--guardar" if i + 1 < args.len() => { guardar = Some(args[i + 1].clone()); i += 2; }
+            _ => { eprintln!("argumento desconocido: {}", args[i]); std::process::exit(2); }
+        }
+    }
+    let email = email.unwrap_or_else(|| { eprintln!("error: falta --email"); std::process::exit(2); });
+    let guardar = guardar.unwrap_or_else(|| { eprintln!("error: falta --guardar"); std::process::exit(2); });
+    if email.is_empty() || email.contains(|c: char| c == '"' || c == '\\' || c.is_whitespace() || c.is_control()) {
+        eprintln!("error: --email {email} no sirve como correo");
+        std::process::exit(2);
+    }
+    if Path::new(&guardar).exists() {
+        eprintln!("error: {guardar} ya existe; no se pide otra clave encima de una guardada");
+        std::process::exit(1);
+    }
+    // Una clave creada que no se puede guardar se pierde, y OpenAlex no da otra
+    // para el mismo correo mientras esa espera activación.
+    let carpeta = Path::new(&guardar).parent().filter(|carpeta| !carpeta.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    if !carpeta.is_dir() {
+        eprintln!("error: no existe la carpeta {}; créala antes de pedir la clave", carpeta.display());
+        std::process::exit(1);
+    }
+    let salida = Command::new("curl")
+        .args(["--silent", "--show-error", "--connect-timeout", "20", "--max-time", "60", "--user-agent", "pulpo-librero/0.1", "--header", "Content-Type: application/json", "--data-raw"])
+        .arg(format!("{{\"email\": \"{email}\"}}"))
+        .args(["--write-out", "\n%{http_code}", "https://api.openalex.org/api-keys"])
+        .stderr(Stdio::inherit())
+        .output();
+    let salida = match salida {
+        Ok(salida) if salida.status.success() => salida,
+        Ok(_) => { eprintln!("error: curl no pudo completar el pedido a OpenAlex"); std::process::exit(1); }
+        Err(err) => { eprintln!("error: no se pudo ejecutar curl: {err}"); std::process::exit(1); }
+    };
+    let texto = String::from_utf8_lossy(&salida.stdout).to_string();
+    let (cuerpo, status) = texto.rsplit_once('\n').unwrap_or(("", texto.as_str()));
+    if status != "201" {
+        let detalle: Vec<String> = ["error", "message"].iter().filter_map(|clave| json_string(cuerpo, clave)).collect();
+        eprintln!("error: OpenAlex respondió HTTP {status}: {}", detalle.join(": "));
+        std::process::exit(1);
+    }
+    let clave = match json_string(cuerpo, "api_key") {
+        Some(clave) if clave_valida(&clave) => clave,
+        _ => { eprintln!("error: la respuesta 201 de OpenAlex no trae una api_key reconocible"); std::process::exit(1); }
+    };
+    let escrito = fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&guardar).and_then(|mut archivo| writeln!(archivo, "{clave}"));
+    if let Err(err) = escrito {
+        eprintln!("error: no se pudo guardar la clave en {guardar}: {err}");
+        std::process::exit(1);
+    }
+    println!(
+        "openalex pedir-clave: clave guardada en {guardar} (600), estado {}; sirve recién cuando se abra el enlace que OpenAlex mandó a {email}, que vence en 7 días",
+        json_string(cuerpo, "status").unwrap_or_default()
+    );
 }
 
 fn escribir_linea(file: &mut fs::File, linea: &str, out: &str) {
@@ -441,10 +597,28 @@ mod tests {
 
     #[test]
     fn distingue_el_cupo_diario_del_limite_por_segundo() {
-        assert!(motivo_del_fallo("429 63890").contains("unas 18 h"));
-        assert!(motivo_del_fallo("429 300").contains("unos 5 min"));
-        assert!(motivo_del_fallo("429 2").contains("un minuto"));
-        assert!(motivo_del_fallo("429 ").contains("un minuto"));
-        assert!(motivo_del_fallo("503 ").contains("HTTP 503"));
+        assert!(motivo_del_fallo("429\t63890\t\t").contains("unas 18 h"));
+        assert!(motivo_del_fallo("429\t300\t\t").contains("unos 5 min"));
+        assert!(motivo_del_fallo("429\t2\t\t").contains("un minuto"));
+        assert!(motivo_del_fallo("429\t\t\t").contains("un minuto"));
+        assert!(motivo_del_fallo("503\t\t\t").contains("HTTP 503"));
+        assert!(motivo_del_fallo("").contains("HTTP 000"));
+    }
+
+    #[test]
+    fn suma_el_cupo_restante_cuando_viene() {
+        assert_eq!(cupo("200\t\t9998\t10000").as_deref(), Some("quedan 9998 de 10000 créditos"));
+        assert_eq!(cupo("200\t\t\t"), None);
+        assert!(motivo_del_fallo("429\t63890\t0\t10000").contains("cupo diario (quedan 0 de 10000 créditos) y vuelve"));
+        assert!(motivo_del_fallo("429\t1\t9000\t10000").contains("límite de peticiones; quedan 9000 de 10000 créditos)"));
+    }
+
+    #[test]
+    fn la_clave_solo_trae_caracteres_de_clave() {
+        assert!(clave_valida("AbC123_x-9"));
+        assert!(!clave_valida(""));
+        assert!(!clave_valida("abc\"def"));
+        assert!(!clave_valida("abc def"));
+        assert!(!clave_valida("{\"api_key\": \"abc\"}"));
     }
 }

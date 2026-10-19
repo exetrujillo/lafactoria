@@ -2,6 +2,20 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.19.0] - 2026-10-19
+
+### Agregado
+
+- **`pulpo-librero` usa una clave de OpenAlex si la hay y ofrece pedirla si no.** Sin clave, OpenAlex da 1000 créditos diarios por IP de salida y una búsqueda cuesta 10. Con la IP compartida de la prueba, a las 17:00 UTC quedaba 1. Una clave gratuita da 10.000. `openalex.rs` toma la clave de `--clave-archivo` o de `OPENALEX_API_KEY` y se la manda a curl por stdin con `--config -`, nunca en la URL ni en argumentos. Muestreado con `pgrep` mientras corría, el `curl` aparecía y la clave nunca. Rechaza un archivo que el grupo u otros puedan leer y una clave con caracteres que una clave no tiene, antes de hacer cualquier pedido. Si OpenAlex rechaza la clave (`401` si no existe, `403` si falta activarla), avisa y repite sin clave. La línea de resumen de `search` y `resolver` dice si fue con clave y cuántos créditos quedan, y el mensaje del `429` también. El subcomando `pedir-clave --email --guardar` hace el `POST /api-keys` sin reintentos, porque repetido podría crear dos claves, y guarda la clave con permisos 600 sin mostrarla. Se niega antes de pedir si el archivo ya existe o falta la carpeta, porque una clave creada que no se puede guardar se pierde. La clave opcional `openalex_clave_archivo` de `ajustes.json` guarda la ruta y nunca la clave, y `validar_ajustes.rs` comprueba que sea texto. El SKILL.md manda detectarla al comenzar sin mirarla y ofrecer pedirla en la compuerta con el correo que dé el usuario. Ante un `409 account_exists`, el usuario la guarda él mismo, sin pegarla en la conversación.
+
+### Cambiado
+
+- `openalex resolver` agrupa 100 DOI por consulta en vez de 50, el máximo de valores por filtro, y cada consulta sigue costando 1 crédito. `fuentes.md` suma "Cupo y clave" con lo medido y ya no dice que OpenAlex no necesita credencial.
+
+### Corregido
+
+- `resolver` pedía `per-page` igual al tamaño de la tanda, así que un DOI que devolvía dos obras dejaba fuera a otro. Con 100 DOI de un catálogo real salieron 101 obras, y la que sobraba dejó un DOI "sin respuesta" que OpenAlex sí conocía. Ahora pide 200 por página y responden los 150 DOI de la prueba. "Con respuesta" cuenta DOI distintos y no obras.
+
 ## [2.18.0] - 2026-10-19
 
 ### Agregado

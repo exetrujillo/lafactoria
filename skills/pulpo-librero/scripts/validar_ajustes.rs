@@ -65,6 +65,10 @@ fn main() {
         if presente(ajustes, "user_agent") && json_string(ajustes, "user_agent").is_none() {
             errores.push("'ajustes.user_agent' existe pero no es una cadena".to_string());
         }
+        // Una ruta y nunca la clave: el agente lee este archivo al comenzar.
+        if presente(ajustes, "openalex_clave_archivo") && json_string(ajustes, "openalex_clave_archivo").is_none() {
+            errores.push("'ajustes.openalex_clave_archivo' existe pero no es una cadena".to_string());
+        }
     }
 
     // pulpo-librero declara dependencias reales de chatarrero y biblio-rata

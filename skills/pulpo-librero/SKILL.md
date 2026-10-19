@@ -42,6 +42,9 @@ Antes de buscar o descargar, pregunta en una sola tanda:
 4. ¿Se quieren obras nuevas, versiones concretas o una lista cerrada de URLs?
 5. Si ya existe `catalogo.tsv`, ¿se deben revisar sus pendientes, incorporar una
    nueva fuente o descargar solo las obras ya marcadas como relevantes?
+6. Si OpenAlex está entre las fuentes y no hay clave (ver "Clave de OpenAlex",
+   en "Herramienta Rust"), ¿se pide una gratuita? Hace falta el correo del
+   usuario. Pregúntalo, no lo inventes ni lo saques de la configuración.
 
 No descargues una obra protegida por paywall, préstamo controlado o
 autenticación. Registra el impedimento y ofrece una fuente abierta alternativa
@@ -277,7 +280,7 @@ pregunta por sus copias abiertas:
   --dest /ruta/biblioteca --source openalex-doi
 ```
 
-Agrupa hasta 50 DOI por consulta, así que resolver un catálogo entero cuesta
+Agrupa hasta 100 DOI por consulta, así que resolver un catálogo entero cuesta
 unas pocas peticiones. Con `--solo-relevante` se limita a las filas ya
 aprobadas, que es lo que conviene cuando la revisión bibliográfica ya se hizo.
 Los DOI que OpenAlex no conoce se informan por su nombre al terminar: esa fila
@@ -285,11 +288,42 @@ se queda sin ubicación y el orquestador decide si buscarla en otra fuente. La
 fusión posterior conserva `decision` y `decision_reason`, de modo que resolver
 nunca pisa el trabajo de revisión.
 
-Sin clave, OpenAlex da un cupo diario que una corrida grande agota: el
-2026-10-19 alcanzó para unas 67 búsquedas. Una consulta de `resolver` cuesta la
-décima parte que una búsqueda, así que conviene reservarle cupo. Agotado, el
-adaptador sale con 1 y dice en cuánto tiempo vuelve el cupo, que se renueva a
-medianoche UTC. No es una búsqueda sin resultados y no se reintenta antes.
+**Clave de OpenAlex.** OpenAlex cobra cada consulta en créditos diarios que se
+renuevan a medianoche UTC. Una búsqueda cuesta 10 y una consulta de `resolver`
+cuesta 1, aunque lleve 100 DOI. Sin clave el cupo es de 1000 créditos por IP de
+salida, y en una red compartida puede estar agotado antes de empezar. Con una
+clave gratuita sube a 10.000 y es solo de quien la pidió.
+
+Al comenzar una corrida que use OpenAlex, averigua si hay clave sin mirarla. Si
+`ajustes.json` declara `openalex_clave_archivo` y el archivo existe, pasa
+`--clave-archivo` con su ruta a cada `search` y `resolver`. La ruta es relativa
+a `vivencias/` salvo que empiece con `/`. Si no, comprueba la variable con
+`test -n "${OPENALEX_API_KEY:-}" && echo hay`. Si está, el adaptador la toma
+solo. Nunca abras, imprimas ni copies el archivo de la clave, ni pongas la clave
+en una URL o en un argumento, que cualquiera ve con `ps`. El adaptador se la
+manda a curl por stdin y rechaza un archivo que otros usuarios puedan leer.
+
+Si no hay clave, ofrécela en la compuerta y pídela con el correo que dé el
+usuario:
+
+```sh
+<tmp>/pulpo-openalex pedir-clave --email CORREO \
+  --guardar <fuente>/vivencias/openalex.key
+```
+
+El adaptador guarda la clave con permisos 600 y no la muestra. Sirve cuando el
+usuario abre el enlace que OpenAlex le manda por correo. Después agrega
+`"openalex_clave_archivo": "openalex.key"` a `ajustes` y corre el validador. Si
+OpenAlex responde `409 account_exists`, ese correo ya tiene cuenta. El usuario
+copia la clave desde Settings > API key en openalex.org y la guarda él mismo en
+ese archivo con permisos 600, sin pegarla en la conversación. Mientras no esté
+activada, el adaptador avisa del `403` y sigue sin clave, y hace lo mismo con
+una clave mal copiada (`401`).
+
+La línea de resumen de `search` y `resolver` dice si la consulta fue con clave y
+cuántos créditos quedan. Úsala para reservar cupo para `resolver`, que es el
+paso que no tiene reemplazo. Agotado el cupo, el adaptador sale con 1 y dice
+cuándo vuelve. No es una búsqueda sin resultados y no se reintenta antes.
 
 Para buscar en arXiv, compila el adaptador oficial Atom y conserva su salida
 como catálogo de candidatos. `--desde` acota por fecha de envío y ordena de lo
@@ -388,6 +422,9 @@ Lee `vivencias/ajustes.json` al comenzar una corrida y respeta sus preferencias:
 - `pausa_ms` (number, opcional): pausa entre peticiones a hosts distintos.
 - `pausa_mismo_host_ms` (number, opcional): pausa entre peticiones al mismo host.
 - `user_agent` (string, opcional): con qué cliente se presenta el descargador.
+- `openalex_clave_archivo` (string, opcional): ruta del archivo con la clave de
+  OpenAlex, que va a `scripts/openalex.rs` como `--clave-archivo`. Es una ruta
+  y nunca la clave (ver "Clave de OpenAlex").
 
 Pasa esos valores a `scripts/pulpo.rs` mediante `--max-files`, `--max-bytes`,
 `--max-total-bytes`, `--pausa-ms`, `--pausa-mismo-host-ms` y `--user-agent`. Las
