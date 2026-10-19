@@ -2,6 +2,26 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.20.0] - 2026-10-19
+
+### Agregado
+
+- **`pulpo-librero` busca otra copia cuando la editorial bloquea.** En una biblioteca real de prueba sobre indicadores compuestos habían bajado 17 de 52 relevantes. Medido sobre las 35 que faltaban, el problema no era la falta de fuentes: Springer y Anubis (HAL, EconStor, SSOAR) desafían a todo UA que diga "Mozilla" y atienden a curl, y varias copias de repositorio ya estaban en el catálogo pero en hosts sin autorizar. `descargar` prueba ahora cada URL en cascada: el UA de navegador; ante un challenge que no es de Cloudflare o un `403` sin `cf-mitigated`, el UA por defecto de curl, que no nombra a la skill; desde una landing, su `citation_pdf_url` o el PDF del bundle `ORIGINAL` de la API de DSpace 7; una URL de PMC o Europe PMC se cambia por el PDF del conjunto abierto de NCBI en S3; y, si la obra está declarada abierta y se autorizó `archive.org`, la copia de Wayback de las URLs que fallaron. Una obra cerrada no pasa por Wayback. `reason` dice qué nivel entregó el PDF. El SKILL.md suma el paso "Otra copia": autorizar el dominio base de los repositorios que el manifiesto informa sin autorizar, `openalex resolver --fallidas` y la búsqueda por título de otras versiones, repitiendo `descargar` después de cada uno. Con todo eso, la misma biblioteca llegó a 37 de 52: 8 obras con el UA de curl, 6 al autorizar el dominio base, 3 por `citation_pdf_url`, 2 desde Wayback (MDPI y BMJ, tras Akamai y Cloudflare) y una versión de congreso por DSpace 7. Las 15 que faltan están tras Cloudflare o Akamai sin otra copia (Wiley, OUP, OECD iLibrary, ScienceDirect, el FMI, un Pure), tras el WAF del JRC o de figshare, piden login, solo tienen un `.docx` o están en PMC sin PDF. CORE, Semantic Scholar y Unpaywall se midieron como fuente de copias y no dieron ninguna que OpenAlex no tuviera.
+- Estado `host_no_autorizado` en el manifiesto, para la obra sin ninguna URL en un host autorizado, con los hosts en `reason`. Antes salía `http_error` con "ninguna ubicación respondió", aunque no se hubiera pedido nada: así quedaron 8 de las 15 `http_error` de la prueba. Si hubo intentos, `reason` termina con `sin autorizar:` y las URLs, redirecciones o copias de Wayback que quedaron fuera.
+- `openalex resolver --fallidas` toma las relevantes con DOI que no tienen `accepted` en el manifiesto, aunque ya tengan `pdf_url`. Sobre las 17 de la prueba costó 1 crédito y trajo copias de cuatro repositorios universitarios. `pdf_urls` de OpenAlex suma al final las landings de las ubicaciones abiertas que no declaran PDF, salvo `doi.org`.
+
+### Cambiado
+
+- `pulpo buscar` une `pdf_urls` en vez de reemplazarla: primero las URLs nuevas y después las anteriores. Si no, la salida de `resolver` borraba las ubicaciones que había traído otra fuente.
+- `--max-files` ya no cuenta las obras que no hacen ningún pedido (`no_pdf_location`, `host_no_autorizado`). En la prueba, el agente tuvo que ordenar el catálogo para no gastar el tope en ellas.
+- `descargar` corta una transferencia solo si baja de 1 KB/s durante un minuto, con un tope de 15 min por pedido. El tope fijo de 60 s cortaba a medio bajar los PDF de HAL y EconStor, que entregan a 13-16 KB/s.
+- La API de Wayback limita la tasa: `descargar` no la consulta para `doi.org` ni `handle.net`, que solo redirigen, y deja de usarla con el primer `429`. `reason` lo dice para repetir más tarde.
+- `fuentes.md` registra lo medido: Anubis y Springer contra los UA "Mozilla", también uno completo de Chrome 151; Cloudflare gestionado y Akamai contra cualquier UA; que el UA de curl habría perdido 3 de las 17 que bajaron con el de Chrome (CEPAL y la ONU), así que el orden se queda; Wayback; el conjunto abierto de PMC; y CORE, Semantic Scholar batch y PMC como fuentes de copia. Corrige la nota de que Springer entregaba `%PDF-`, que se había medido con UA de script.
+
+### Corregido
+
+- `descargar` leía las cabeceras como UTF-8, y un `Location` crudo con espacios y bytes Latin-1 (el DSpace de CONACYT con "evaluaci\xf3n" en el nombre del archivo) hacía fallar la lectura en silencio: el cuerpo del 301 pasaba por la respuesta y la obra quedaba `not_a_pdf`. Ahora lee bytes y codifica el `Location` byte a byte, como curl con `-L`.
+
 ## [2.19.0] - 2026-10-19
 
 ### Agregado

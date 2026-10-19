@@ -40,8 +40,11 @@ La identidad se resuelve así:
 Una nueva observación actualiza los metadatos no vacíos de su identidad,
 incluidos `published` y `cited_by`, pero conserva `decision` y
 `decision_reason`. Un valor vacío nunca borra uno ya registrado, así que el
-conteo de citas que queda es el de la última fuente que lo trajo. El catálogo
-permite revisar y decidir sin descargar nada.
+conteo de citas que queda es el de la última fuente que lo trajo. `pdf_urls` no
+se reemplaza sino que se une: primero las URLs de la observación nueva y
+después las anteriores que no estén. Así una fuente que trae otra copia no
+borra las ubicaciones que trajo otra. El catálogo permite revisar y decidir sin
+descargar nada.
 
 Un `catalogo.tsv` anterior, de 17 columnas sin `published` ni `cited_by`, se
 sigue leyendo: `buscar` le agrega en memoria esas dos columnas vacías y la
@@ -63,22 +66,37 @@ id<TAB>title<TAB>source_url<TAB>path<TAB>status<TAB>reason<TAB>bytes<TAB>sha256
 Estados:
 
 - `accepted`: descarga que pasó la comprobación de PDF y quedó en el destino.
+  `source_url` es la URL que lo entregó y `reason` dice por qué camino: "PDF
+  verificado", y a continuación "vía citation_pdf_url", "vía API de DSpace 7",
+  "vía el conjunto abierto de PMC", "desde Wayback <fecha>" o "con el UA de
+  curl" cuando hizo falta ese nivel de
+  la cascada (ver "Herramienta Rust" en el SKILL.md).
 - `duplicate`: el archivo ya estaba presente con el mismo hash; una colisión de
   nombre con contenido distinto conserva la nueva versión usando un sufijo en
   `path`.
 - `no_pdf_location`: no había una ubicación HTTP candidata.
-- `not_a_pdf`: la fuente respondió, pero el cuerpo no era un PDF.
+- `host_no_autorizado`: había ubicaciones, pero ninguna en un host autorizado,
+  así que no se hizo ningún pedido. `reason` nombra los hosts. Ni esta fila ni
+  la de `no_pdf_location` cuentan contra `--max-files`.
+- `not_a_pdf`: la fuente respondió con una landing HTML que no trae
+  `citation_pdf_url` ni es de DSpace 7, o con otro cuerpo que no es PDF.
 - `unreadable_pdf`: el cuerpo parecía PDF, pero el extractor no pudo abrirlo.
 - `limit_exceeded`: no se incorporó por alcanzar un límite de archivos o bytes.
 - `blocked_challenge`: el proveedor respondió con un challenge anti-bot: las
   cabeceras de Cloudflare `cf-mitigated: challenge` o `server-timing: chlray`,
   un cuerpo HTML cuyo `<title>` es el de una página de challenge conocida
   ("Client Challenge", "Just a moment...") o un cuerpo que carga los scripts de
-  Anubis, en cualquier idioma. Es terminal
-  y distinto de `http_error`: ninguna combinación de cabeceras lo pasa, así que
-  no se reintenta por HTTP ni se prueban otras ubicaciones del mismo proveedor.
-  La salida es buscar una copia en otro host, no insistir.
+  Anubis, en cualquier idioma. Un challenge que no es de Cloudflare se repite
+  una vez con el UA de curl antes de quedar así; el de Cloudflare no, porque no
+  cede con ningún UA. Es distinto de `http_error` y no se reintenta por HTTP: la
+  salida es otra copia (paso "Otra copia" del SKILL.md), no insistir.
 - `http_error`: todas las ubicaciones fallaron en transporte o status HTTP.
+
+En los estados de fallo, `reason` termina con `sin autorizar: <hosts>` cuando
+alguna ubicación, alguna redirección o la copia de Wayback quedó sin probar
+por estar en un host no autorizado. Es la lista que el orquestador revisa antes
+de la siguiente corrida. Si la API de Wayback respondió `429`, `reason` lo dice
+antes de esa lista, y la obra se vuelve a intentar en una corrida posterior.
 - `failed`: fallo local al mover, registrar o calcular SHA-256.
 - `rejected`: lo escribe el orquestador, nunca el binario. El archivo pasó la
   comprobación de PDF pero no es la obra (otra obra, un fragmento, muchas menos

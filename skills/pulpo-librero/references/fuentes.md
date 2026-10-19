@@ -192,9 +192,9 @@ Bulk filtra por fecha con `publicationDateOrYear=desde:`, ordena por `citationCo
 
 Algunas obras traen solo `year`, sin `publicationDate` (63 de 1000 en el sondeo y 10 de 1000 en la verificación), y el rango de fecha las deja pasar por el año. El scraper descarta las que no puede ubicar después de `--desde`.
 
-`openAccessPdf.url` viene vacía en más de la mitad de las obras, también en preprints de arXiv que declaran `isOpenAccess=false`. Cuando hay `externalIds.ArXiv`, `pdf_urls` agrega primero `https://arxiv.org/pdf/<id>`, el único host que dio PDF en el sondeo, y `pdf_url` queda con lo que declara la fuente. Las URL de `doi.org` y de editoriales pueden devolver una landing HTML (Nature lo hizo). Un PDF de `link.springer.com` sí bajó con HTTP simple. Autoriza `arxiv.org` en el descargador y deja que la comprobación de `%PDF-` decida el resto.
+`openAccessPdf.url` viene vacía en más de la mitad de las obras, también en preprints de arXiv que declaran `isOpenAccess=false`. Cuando hay `externalIds.ArXiv`, `pdf_urls` agrega primero `https://arxiv.org/pdf/<id>`, el único host que dio PDF en el sondeo, y `pdf_url` queda con lo que declara la fuente. Las URL de `doi.org` y de editoriales pueden devolver una landing HTML (Nature lo hizo). Un PDF de `link.springer.com` sí bajó con HTTP simple, con UA de script. Con el de Chrome, Springer responde "Client Challenge" (ver "Anubis y Springer desafían al navegador, no a curl"). Autoriza `arxiv.org` en el descargador y deja que la comprobación de `%PDF-` decida el resto.
 
-Sin clave el cupo es compartido y se agota sin aviso. El 429 no trae `Retry-After` ni cabeceras de límite, y en el sondeo se encadenó durante varios minutos. El scraper informa el 429 aparte y sale con 1. No lo relances en seguida: espera varios minutos o usa otra fuente. `fieldsOfStudy` usa la lista de campos de Semantic Scholar (Computer Science, Psychology, Sociology, Economics, Medicine, Biology, Mathematics y otros). No hay un campo Neuroscience: para neurociencias usa Psychology, Medicine o Biology.
+Sin clave el cupo es compartido y se agota sin aviso. El 429 no trae `Retry-After` ni cabeceras de límite, y en el sondeo se encadenó durante varios minutos. El scraper informa el 429 aparte y sale con 1. No lo relances en seguida: espera varios minutos o usa otra fuente. `/paper/batch`, que pide hasta 500 obras por DOI en un solo POST, también dio 429 sin clave el 2026-10-19, así que tampoco sirve para buscarle copia a las obras que fallaron. `fieldsOfStudy` usa la lista de campos de Semantic Scholar (Computer Science, Psychology, Sociology, Economics, Medicine, Biology, Mathematics y otros). No hay un campo Neuroscience: para neurociencias usa Psychology, Medicine o Biology.
 
 ## Crossref
 
@@ -309,6 +309,14 @@ en el cuerpo.
   `pulpo-librero/0.1`. El adaptador pone esos enlaces ajenos antes que los
   propios en `pdf_urls`. El texto completo en JATS sí sale por
   `/<pmcid>/fullTextXML` con `200`, pero no es PDF.
+- PMC tampoco entrega el PDF por su sitio. El 2026-10-19
+  `www.ncbi.nlm.nih.gov/pmc/articles/<id>` redirigió a `pmc.ncbi.nlm.nih.gov`,
+  que respondió un reCAPTCHA ("Comprobando tu navegador"), y el servicio
+  `oa.fcgi` respondió `404`. El mismo día, el conjunto abierto que NCBI publica
+  en S3 (`pmc-oa-opendata.s3.amazonaws.com`) respondió sin challenge. Su
+  `metadata/PMC<id>.<versión>.json` trae `pdf_url` cuando hay PDF:
+  PMC6559782 (BMJ) lo tenía y bajó, y PMC5473177 (Elsevier, CC BY) solo traía
+  XML y texto. `descargar` cambia toda URL de PMC o Europe PMC por ese PDF.
 - Para conseguir el archivo, la salida es pasar los DOI por `openalex resolver`.
   `sort=CITED desc` ordena por citas, y en estadística biomédica ese orden lo
   dominan los estudios de carga de enfermedad, no la metodología.
@@ -384,9 +392,9 @@ El sondeo del 2026-10-19 confirmó que es el nivel 0 (`200` sin credencial ni na
 - **`dim` y no `oai_dc`.** `oai_dc` trae solo el año. `dim` trae además `dc.date.accessioned` con día, el DOI en `dc.identifier.pi` y la licencia real en `dc.rights.license` (CC BY en 10419/344156), separada del `Nutzungsbedingungen` genérico. `published` es el día de depósito cuando cae en el mismo año que `dc.date.issued`, y si no, solo el año.
 - **La consulta se resuelve en el cliente** sobre título, resumen, palabras clave y JEL, así que cada página de 100 registros cuesta unos 20 s y una consulta específica puede no encontrar nada en 10 páginas. Con `inflation` salieron 10 obras en 1000 registros. Acota con `--desde` y `--set`.
 - **Sin señal de tracción.** `cited_by` sale siempre vacío.
-- **El PDF está en el mismo host.** `/rest/handle/<hdl>?expand=bitstreams` lista los archivos; se toma solo el bundle `ORIGINAL` con `application/pdf` (`TEXT`, `THUMBNAIL` y `SWORD` son derivados). El `retrieve` entregó `%PDF-` sin redirección, pero a unos 16 KB/s: uno de 2 MB no terminó en 60 s.
+- **El PDF está en el mismo host.** `/rest/handle/<hdl>?expand=bitstreams` lista los archivos; se toma solo el bundle `ORIGINAL` con `application/pdf` (`TEXT`, `THUMBNAIL` y `SWORD` son derivados). El `retrieve` entregó `%PDF-` sin redirección, pero a unos 16 KB/s: uno de 2 MB no terminó en 60 s. Desde 2.20.0 `descargar` corta solo lo que baja de 1 KB/s durante un minuto, con un tope de 15 min por pedido.
 
-Basta `--allow-host www.econstor.eu`. Sin DOI, la identidad queda `repec-econstor:<handle>`.
+Desde el 2026-10-19 los bitstreams de EconStor están tras Anubis para los UA de navegador. Con el UA de curl entregan el PDF, y `descargar` repite con ese UA (ver "Anubis y Springer desafían al navegador, no a curl"). Basta `--allow-host www.econstor.eu`. Sin DOI, la identidad queda `repec-econstor:<handle>`.
 
 ## HAL (archives-ouvertes)
 
@@ -398,7 +406,7 @@ No entrega señal de tracción: la lista completa de campos de una obra no trae 
 
 Para descubrir literatura de frontera conviene incluir `UNDEFINED` (preprints y documentos de trabajo) además de `ART`. Muchas obras de estadística recientes salen como `UNDEFINED`, y con solo `ART` quedan fuera.
 
-`openAccess_bool:true` no garantiza archivo. Los registros `submitType_s:notice` son abiertos solo por un enlace externo (`linkExtUrl_s`, casi siempre doi.org). En el sondeo, 41 de 106 artículos abiertos venían así. `--solo-pdf` filtra `submitType_s:file`. El PDF es `fileMain_s` (`https://<portal>.hal.science/<halId>/document`), que en el sondeo devolvió `application/pdf` con `%PDF-` sin redirección. El 2026-10-19 `hal.science` ya respondía con el challenge de Anubis (ver Zora, más abajo): `descargar` lo marca `blocked_challenge` y la copia hay que buscarla en otro host. `files_s` puede traer anexos y va como alternativa. Los hosts son `hal.science` y subdominios de portal (`inria.hal.science`, `shs.hal.science`, `amu.hal.science`), distintos del host de la API, así que hay que autorizarlos en `descargar`.
+`openAccess_bool:true` no garantiza archivo. Los registros `submitType_s:notice` son abiertos solo por un enlace externo (`linkExtUrl_s`, casi siempre doi.org). En el sondeo, 41 de 106 artículos abiertos venían así. `--solo-pdf` filtra `submitType_s:file`. El PDF es `fileMain_s` (`https://<portal>.hal.science/<halId>/document`), que en el sondeo devolvió `application/pdf` con `%PDF-` sin redirección. El 2026-10-19 `hal.science` ya respondía con el challenge de Anubis al UA de navegador (ver Zora, más abajo), y con el UA de curl entregó el PDF. `descargar` repite con ese UA antes de marcarlo `blocked_challenge`. `files_s` puede traer anexos y va como alternativa. Los hosts son `hal.science` y subdominios de portal (`inria.hal.science`, `shs.hal.science`, `amu.hal.science`), distintos del host de la API, así que hay que autorizarlos en `descargar`.
 
 Cuidados. Una consulta mal formada o un campo de orden inexistente vuelve con status 200 y el cuerpo `{"error":{"msg":...}}`, así que el scraper exige la clave `response`. `cursorMark` exige un desempate único en el orden (`docid`) y sin él da ese mismo error. `rows` tiene un tope silencioso de 10000. `halId_s` es el identificador estable y no coincide con `docid`.
 
@@ -428,6 +436,12 @@ respondió 403 con `cf-mitigated: challenge`, y la única alternativa de
 camino es tomar los DOI y pasarlos por `openalex resolver`. La API es lenta, con
 50 s por página de 10 obras y timeouts con páginas de 25, y la cabecera
 `x-ratelimit-limit: 10` vino acompañada de un 429 con pausas de 3 s.
+
+Como fuente de copias tampoco sirvió. El 2026-10-19 la búsqueda por DOI
+(`q=doi:"<doi>"`, 13 s) encontró una obra bloqueada en Springer y nombró como
+proveedor su repositorio de origen, pero `downloadUrl` y `sourceFulltextUrls`
+apuntaban a `core.ac.uk/download/`, que seguía con `cf-mitigated: challenge`.
+La copia de ese repositorio ya estaba entre las ubicaciones de OpenAlex.
 
 ## Fuentes sondeadas y descartadas
 
@@ -552,11 +566,71 @@ obras declaradas abiertas, en dos rondas distintas:
   otro idioma el título cambia, y a Anubis lo delata la ruta de sus scripts.
 
 `pulpo descargar` compara el `<title>` del cuerpo con esos títulos y con el
-"Just a moment..." de Cloudflare, y los marca `blocked_challenge`: terminal,
-la salida es otro host. Lo que no ve es un `403` con "Just a moment..." y sin
+"Just a moment..." de Cloudflare. Los repite una vez con el UA de curl (ver la
+sección siguiente) y, si siguen, los marca `blocked_challenge`: la salida es
+otro host. Lo que no ve es un `403` con "Just a moment..." y sin
 `cf-mitigated`, porque con `curl --fail` el cuerpo de un `403` no se guarda.
 Ese caso sigue cayendo en `http_error`, y si es la única pista, mirar el
 cuerpo con un `curl` a mano lo aclara.
+
+### Anubis y Springer desafían al navegador, no a curl
+
+Medido el 2026-10-19 sobre obras abiertas. Anubis (HAL, EconStor, SSOAR,
+GUPEA) y el "Client Challenge" de `link.springer.com` responden con el
+challenge a todo UA que diga "Mozilla": al Chrome 140 de `descargar` y también
+a un Chrome 151 con `sec-ch-ua`, `Sec-Fetch-*` y `Upgrade-Insecure-Requests`.
+Con el UA por defecto de curl (`curl/8.5.0`) o con uno de script, HAL,
+EconStor, SSOAR y Springer entregaron `%PDF-`. Es la política por defecto de
+Anubis, que desafía a quien dice ser navegador y deja pasar al cliente que no lo
+dice. Springer pasa antes por `idp.springer.com`, que solo pone una cookie y
+vuelve con `?error=cookies_not_supported`, así que hace falta autorizar
+`springer.com`.
+
+El OKR del Banco Mundial (`openknowledge.worldbank.org`) respondió `403` al
+Chrome 140 de `descargar` y `200` a curl.
+
+Por eso `descargar` repite con el UA de curl un challenge que no es de
+Cloudflare y un `403` sin `cf-mitigated`. No es evasión: se presenta como lo
+que es.
+
+El orden no se puede invertir. De las 17 obras que una ronda real sobre
+indicadores compuestos había bajado con el UA de Chrome, con el de curl se
+habrían perdido tres:
+`repositorio.cepal.org` respondió el bloqueo "Attention Required" de
+Cloudflare y `desapublications.un.org` un `403`. Por eso el primer intento
+sigue siendo el navegador.
+
+### Cloudflare gestionado y Akamai: ningún UA
+
+En la misma ronda no cedieron con ninguno de los tres UA Wiley, OUP, OECD
+iLibrary y BMJ (`403` con "Just a moment..."), ScienceDirect (`403`) y MDPI,
+que con curl responde `403 Access Denied` de Akamai y con un Chrome completo una
+página de JavaScript con `bm-verify`. Un UA más real, o el que el usuario tenga
+en su navegador, no cambia nada, porque estos challenges miran la huella TLS de
+curl y ejecutan JavaScript. Para una obra abierta, la salida es otra copia,
+Wayback o el captcha manual.
+
+### Wayback: la copia archivada de una obra abierta
+
+`archive.org/wayback/available?url=<url>` devuelve la instantánea más cercana,
+y `web.archive.org/web/<fecha>id_/<url>` la entrega tal como se archivó, sin la
+barra de Wayback. El 2026-10-19 trajo `%PDF-` del artículo de MDPI (gold,
+CC-BY) y del de BMJ (hybrid), que estaban tras Akamai y Cloudflare, con los dos
+UA. No había copia de los PDF de Wiley y ScienceDirect de la misma prueba, ni
+del de `repositori.uji.es` que respondía `404`. La URL de MDPI del catálogo
+traía `?version=...` y la instantánea medida es la de la URL sin query, así que
+`descargar` prueba las dos.
+
+La API de disponibilidad limita la tasa. En una corrida sobre 35 obras que la
+consultaba por cada URL fallida, también las de `doi.org`, hubo 39 respuestas
+`429` y Wayback no entregó ninguna copia; la misma obra de MDPI, sola, salió de
+Wayback al primer intento. Por eso `descargar` no consulta los resolvedores,
+que nunca tienen un PDF archivado, y deja de usar Wayback con el primer `429`.
+
+Se usa solo con obras declaradas abiertas (`is_oa=true`) y solo sobre URLs de
+hosts autorizados. La instantánea de un PDF de pago sería saltarse el muro, y
+la de un host que no se autorizó traería una copia de un origen que nadie
+revisó.
 
 ### La salida: repositorios institucionales
 
@@ -568,7 +642,11 @@ repositorio. Medido en el mismo sondeo: `10.1145/3411764.3445483` se obtuvo en
 Dos cuidados:
 
 - OpenAlex y Unpaywall suelen traer la landing del repositorio pero con
-  `url_for_pdf` vacío. Hay que raspar la landing y extraer el enlace: en DSpace
+  `url_for_pdf` vacío. Desde 2.20.0 `descargar` sigue solo el
+  `citation_pdf_url` de la landing, que el 2026-10-19 traían Pure
+  (`research.vu.nl`), HAL y el DSpace de `repositorio.conacyt.gov.py`. Lo que
+  quede `not_a_pdf` es una landing sin esa etiqueta, y ahí hay que raspar el
+  enlace: en DSpace
   6 o anterior es un `href` con `/bitstreams/.../download` (DSpace 7 no lo
   trae, ver abajo); en Pure, `/files/NNNN/*.pdf`; en
   **OJS** —que es casi toda la revista universitaria hispana— la landing es
@@ -600,6 +678,12 @@ credenciales:
    del catálogo y `descargar` la baja como cualquier otra.
 
 Medido en una ronda sobre tres repositorios institucionales, con nueve obras
-resueltas así, y vuelto a ver en otra ronda sobre dos repositorios más. Un `401`
+resueltas así, y vuelto a ver en otra ronda sobre dos repositorios más.
+
+Desde 2.20.0 `descargar` hace estos pasos solo cuando la landing es
+`/items/<uuid>` o `/entities/<tipo>/<uuid>`, o `/handle/<prefijo>/<n>` sin
+`citation_pdf_url`, y prueba los bitstreams de `ORIGINAL` que se llaman `.pdf`.
+El 2026-10-19 la API del OKR del Banco Mundial respondió `application/hal+json`
+al UA de curl, con el PDF y su `.txt` en `ORIGINAL`. Un `401`
 del bitstream por esta misma vía pide credencial: es un no definitivo, no un
 bloqueo técnico.

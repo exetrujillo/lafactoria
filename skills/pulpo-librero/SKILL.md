@@ -65,10 +65,11 @@ credenciales, para y marca el proveedor como bloqueado.
 Escalar cuesta cortesía además de tokens: mantén las pausas entre peticiones y
 un límite de intentos por proveedor aunque el nivel más caro funcione.
 
-Un `blocked_challenge` se resuelve primero buscando la obra en otro host. Si no
-hay espejo y la obra es abierta, ofrécele al usuario el captcha manual de
-`chatarrero`: resuelve el challenge en una ventana visible y la descarga sigue
-con esa sesión.
+Cuando una editorial bloquea, `descargar` ya prueba solo varias salidas (ver
+"Herramienta Rust") y el paso "Otra copia" del flujo busca las demás. Si al
+final no hay espejo y la obra es abierta, ofrécele al usuario el captcha manual
+de `chatarrero`: resuelve el challenge en una ventana visible y la descarga
+sigue con esa sesión.
 
 ## Sub-bibliotecas
 
@@ -145,11 +146,33 @@ copiada en dos temas aparece dos veces.
    una fuente sin citas (arXiv, bioRxiv, HAL, OSF, EconStor, LA Referencia),
    así que resolver también sirve para medir tracción, no solo para ubicar.
 6. Solo después ejecuta `scripts/pulpo.rs descargar`: opera sobre filas
-   `relevante`, prueba primero `pdf_url` y después `landing_url`, y no repite una
-   fila ya `accepted` en el manifiesto. Usa un identificador de agente y límites
-   de red, escribe primero en temporal, comprueba que el archivo sea un PDF real,
-   conserva la URL que funcionó y produce una línea por obra.
-7. No incorpores automáticamente un archivo que no sea PDF, esté vacío o no
+   `relevante`, prueba primero `pdf_urls` y `pdf_url` y después `landing_url`, y
+   no repite una fila ya `accepted` en el manifiesto. Cada URL pasa por la
+   cascada de "Herramienta Rust". Usa límites de red, escribe primero en
+   temporal, comprueba que el archivo sea un PDF real, conserva la URL que
+   funcionó y produce una línea por obra.
+7. **Otra copia.** Para cada `relevante` que no quedó `accepted`, sigue estos
+   pasos en orden y repite `descargar` después de cada uno; las ya aceptadas no
+   se vuelven a pedir.
+   1. Lee los hosts de `host_no_autorizado` y de `sin autorizar:` en el
+      manifiesto. Si son repositorios, instituciones o `archive.org`, autoriza
+      su dominio base. No autorices una biblioteca sombra ni un host que pida
+      credenciales.
+   2. Corre `openalex resolver --fallidas` y pasa su salida por `pulpo buscar`
+      (ver "Herramienta Rust"). Trae las demás ubicaciones abiertas de cada
+      obra, también las landings de repositorio.
+   3. Busca por título otras versiones (preprint, working paper, informe) con
+      `openalex search --query '"<título>"' --title`. Lo que traiga entra como
+      filas nuevas `pendiente`. Márcalas `relevante` solo si son la misma obra
+      (autores, año, contenido), y di en `decision_reason` de qué fila son
+      versión.
+   4. Si sigue sin copia y la obra es abierta, ofrece el captcha manual de
+      `chatarrero`, como dice la compuerta.
+
+   CORE, Semantic Scholar y Unpaywall no están en esta lista porque se midieron
+   como fuente de copias y no dieron ninguna que OpenAlex no tuviera. El detalle
+   está en `references/fuentes.md`.
+8. No incorpores automáticamente un archivo que no sea PDF, esté vacío o no
    pueda abrirse con el extractor que usa `biblio-rata`. Déjalo con un estado de
    fallo o revisión en el manifiesto y registra la causa. Si la URL no salió de
    los metadatos —la armaste a mano o la dedujiste del patrón de nombres del
@@ -157,19 +180,19 @@ copiada en dos temas aparece dos veces.
    de darla por buena: un PDF válido de otra obra, o sólo su prefacio, pasa la
    comprobación del extractor. Si no es la obra, su fila pasa a `rejected` (ver
    `references/contrato.md`).
-8. Separa duplicado exacto de versión distinta. El mismo hash puede evitar una
+9. Separa duplicado exacto de versión distinta. El mismo hash puede evitar una
    segunda copia; título parecido, DOI o URL por sí solos no autorizan borrar
    una edición, traducción o preprint.
-9. Si una fuente termina pidiendo login para entregar el documento, marca ese
+10. Si una fuente termina pidiendo login para entregar el documento, marca ese
    proveedor como bloqueado y no sigas intentando con él. Conserva el DOI,
-   título y autores como pistas para que otros scrapers busquen una copia
-   abierta en otra fuente. Esta parada es propia de pulpo-librero: no convierte
+   título y autores como pistas para buscar una copia abierta en otra fuente
+   (paso "Otra copia"). Esta parada es propia de pulpo-librero: no convierte
    un diagnóstico de `chatarrero` en un veto global.
-10. Consulta `biblio-rata` sobre el corpus existente y revisa si satisface los
+11. Consulta `biblio-rata` sobre el corpus existente y revisa si satisface los
    criterios del problema. Si faltan autores,
    periodos, perspectivas o tipos de fuente, formula otra ronda de búsquedas y
    repite solo los scrapers necesarios.
-11. Solo después mueve los documentos aceptados al corpus definitivo y ejecuta la
+12. Solo después mueve los documentos aceptados al corpus definitivo y ejecuta la
    indexación incremental de `biblio-rata`.
 
 ## Herramienta Rust
@@ -214,14 +237,47 @@ redirección, el `Referer` de la URL de la que viene. La pausa por defecto es de
 4,5 s entre peticiones y **9 s cuando dos seguidas van al mismo host**, porque
 el costo de una corrida no lo paga quien la lanza sino el servidor que la
 atiende. `--pausa-ms`, `--pausa-mismo-host-ms` y `--user-agent` permiten
-subirlas; conviene bajarlas solo contra un host propio.
+subirlas; conviene bajarlas solo contra un host propio. Una transferencia se
+corta solo si baja de 1 KB/s durante un minuto, con un tope de 15 min por
+pedido, porque HAL y EconStor entregan a 13-16 KB/s.
 
-Presentarse como navegador **no es evasión y no cambia la doctrina de la
-compuerta**: un paywall, un login o un préstamo controlado siguen siendo un no
-definitivo, y un challenge anti-bot sigue siendo terminal. Es que varios
-repositorios institucionales rechazan de plano al cliente que se anuncia como
-script aunque la obra sea de lectura libre; el sondeo de ACM del 2026-09-09 dejó
-medido que contra un challenge real esto tampoco alcanza.
+Cada URL pasa por una cascada, de lo más barato a lo más caro, y `reason` dice
+en el manifiesto qué nivel entregó el PDF:
+
+1. El pedido con el UA de navegador.
+2. Ante un challenge que no es de Cloudflare (Anubis, el "Client Challenge" de
+   Springer) o un `403` sin `cf-mitigated`, la misma URL con el UA por defecto
+   de curl. Anubis y Springer desafían a todo UA que diga "Mozilla", por real
+   que sea, y atienden a curl, que dice lo que es y no nombra a la skill.
+3. Si llega una landing, su `<meta name="citation_pdf_url">`, una sola vez.
+4. Si la landing es de DSpace 7, el PDF del bundle `ORIGINAL` que da su API
+   REST.
+5. Una URL de PMC o de Europe PMC no se pide, porque responden con reCAPTCHA o
+   con un challenge. Se cambia por el PDF que declara el conjunto abierto que
+   NCBI publica en S3, con `--allow-host pmc-oa-opendata.s3.amazonaws.com`.
+6. Cuando ninguna URL entregó y la fila dice `is_oa=true`, la copia de Wayback
+   de las URLs que fallaron, salvo las de `doi.org` y `handle.net`, que solo
+   redirigen. Hace falta `--allow-host archive.org`. Una obra cerrada no pasa
+   por Wayback: su copia archivada sería saltarse el muro. La API de Wayback
+   responde `429` si se la consulta seguido, y con el primero la corrida deja
+   de usarla y `reason` lo dice. Repite `descargar` más tarde.
+
+Nada de esto es evasión ni cambia la doctrina de la compuerta: un paywall, un
+login o un préstamo controlado siguen siendo un no definitivo. Varios
+repositorios institucionales rechazan al cliente que se anuncia como script, y
+por eso el primer intento va como navegador. El challenge gestionado de
+Cloudflare y el de Akamai no ceden con ningún UA ni con ninguna cabecera,
+porque miran la huella TLS y ejecutan JavaScript, así que `descargar` no los
+repite. Lo midió el sondeo de ACM del 2026-09-09 y lo confirmó la ronda del
+2026-10-19 en Wiley, OUP, OECD iLibrary, BMJ y MDPI.
+
+Una obra sin ninguna URL en un host autorizado queda `host_no_autorizado`, con
+los hosts en `reason`, y no gasta el tope de `--max-files`. Si hubo intentos,
+`reason` termina con `sin autorizar:` y las URLs, redirecciones o copias de
+Wayback que quedaron fuera. Autoriza el dominio base, que cubre los
+subdominios: `upo.es` y no `www.upo.es`, `worldbank.org` porque
+`documents.worldbank.org` redirige a `documents1`, y `springer.com` porque
+`link.springer.com` pasa por `idp.springer.com` para poner una cookie.
 
 Las redirecciones se siguen una a una solo si el host de cada destino también
 está autorizado. No se permiten hosts locales o privados. Un archivo se acepta
@@ -238,7 +294,9 @@ rustc scripts/openalex.rs -O -o <tmp>/pulpo-openalex
 
 El TSV de OpenAlex incluye `is_oa`, `oa_status`, `license`, `version`,
 `landing_url`, `pdf_url`, `pdf_urls` y `abstract`, pero no es una lista de archivos
-aceptados. El orquestador debe inspeccionar sus ubicaciones abiertas, ampliar la
+aceptados. `pdf_urls` trae primero los PDF de todas las ubicaciones y al final
+las landings de las ubicaciones abiertas que no declaran PDF, casi siempre de
+repositorio. El orquestador debe inspeccionar sus ubicaciones abiertas, ampliar la
 búsqueda con variantes del nombre cuando corresponda y decidir en el catálogo
 qué candidatos pasan al descargador. El esquema completo está en
 `references/contrato.md`.
@@ -283,6 +341,11 @@ pregunta por sus copias abiertas:
 Agrupa hasta 100 DOI por consulta, así que resolver un catálogo entero cuesta
 unas pocas peticiones. Con `--solo-relevante` se limita a las filas ya
 aprobadas, que es lo que conviene cuando la revisión bibliográfica ya se hizo.
+Después de `descargar`, `--fallidas` toma en cambio las relevantes con DOI que
+no tienen `accepted` en el `manifest.tsv` de al lado, aunque ya tengan
+`pdf_url`. Sirve sobre todo para las filas que vinieron de Crossref, Semantic
+Scholar u OSF, que no traen las demás ubicaciones de la obra. La fusión suma
+esas URLs a `pdf_urls` sin borrar las que ya había.
 Los DOI que OpenAlex no conoce se informan por su nombre al terminar: esa fila
 se queda sin ubicación y el orquestador decide si buscarla en otra fuente. La
 fusión posterior conserva `decision` y `decision_reason`, de modo que resolver

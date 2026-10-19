@@ -38,7 +38,7 @@ fn usage() -> ! {
     eprintln!("uso: openalex search --query TEXTO --out RESULTADOS.tsv [--title] [--per-page N] [--mailto EMAIL]");
     eprintln!("                    [--desde YYYY-MM-DD] [--orden citas|fecha|relevancia] [--tipo article|preprint|...] [--min-citas N]");
     eprintln!("                    [--clave-archivo RUTA]");
-    eprintln!("     openalex resolver --catalogo CATALOGO.tsv --out RESULTADOS.tsv [--solo-relevante] [--max N] [--mailto EMAIL]");
+    eprintln!("     openalex resolver --catalogo CATALOGO.tsv --out RESULTADOS.tsv [--solo-relevante | --fallidas] [--max N] [--mailto EMAIL]");
     eprintln!("                    [--clave-archivo RUTA]");
     eprintln!("     openalex pedir-clave --email CORREO --guardar RUTA");
     eprintln!("sin --clave-archivo, la clave sale de OPENALEX_API_KEY si está definida");
@@ -159,6 +159,7 @@ fn run_resolver(args: &[String]) {
     let mut mailto = None;
     let mut max = 200usize;
     let mut solo_relevante = false;
+    let mut fallidas = false;
     let mut clave_archivo = None;
     let mut i = 0;
     while i < args.len() {
@@ -171,6 +172,7 @@ fn run_resolver(args: &[String]) {
                 i += 2;
             }
             "--solo-relevante" => { solo_relevante = true; i += 1; }
+            "--fallidas" => { fallidas = true; i += 1; }
             "--clave-archivo" if i + 1 < args.len() => { clave_archivo = Some(args[i + 1].clone()); i += 2; }
             _ => { eprintln!("argumento desconocido: {}", args[i]); std::process::exit(2); }
         }
@@ -178,12 +180,16 @@ fn run_resolver(args: &[String]) {
     let catalogo = catalogo.unwrap_or_else(|| { eprintln!("error: falta --catalogo"); std::process::exit(2); });
     let out = out.unwrap_or_else(|| { eprintln!("error: falta --out"); std::process::exit(2); });
     let mut clave = cargar_clave(clave_archivo.as_deref()).unwrap_or_else(|err| { eprintln!("error: {err}"); std::process::exit(1); });
-    let pendientes = match dois_pendientes(&catalogo, solo_relevante, max) {
+    let pendientes = match dois_pendientes(&catalogo, solo_relevante, max, fallidas) {
         Ok(pendientes) => pendientes,
         Err(err) => { eprintln!("error: {err}"); std::process::exit(1); }
     };
     if pendientes.is_empty() {
-        eprintln!("advertencia: no hay filas con DOI y sin pdf_url que resolver");
+        if fallidas {
+            eprintln!("advertencia: no hay relevantes con DOI sin accepted en el manifiesto");
+        } else {
+            eprintln!("advertencia: no hay filas con DOI y sin pdf_url que resolver");
+        }
     }
     let raw_path = format!("{out}.raw.jsonl");
     let _ = fs::remove_file(&raw_path);
@@ -239,14 +245,35 @@ fn run_resolver(args: &[String]) {
     }
 }
 
-fn dois_pendientes(catalogo: &str, solo_relevante: bool, max: usize) -> Result<Vec<String>, String> {
+// Con --fallidas cuenta el manifiesto y no el pdf_url: una relevante que no
+// bajó de su ubicación conocida necesita las demás ubicaciones de la obra.
+fn dois_pendientes(catalogo: &str, solo_relevante: bool, max: usize, fallidas: bool) -> Result<Vec<String>, String> {
     let contenido = fs::read_to_string(catalogo).map_err(|err| format!("no se pudo leer {catalogo}: {err}"))?;
+    let aceptadas = if fallidas {
+        let manifiesto = Path::new(catalogo).with_file_name("manifest.tsv");
+        let texto = fs::read_to_string(&manifiesto).map_err(|err| format!("--fallidas necesita {}: {err}", manifiesto.display()))?;
+        Some(aceptadas_en_manifiesto(&texto))
+    } else {
+        None
+    };
+    elegir_dois(&contenido, catalogo, solo_relevante || fallidas, max, aceptadas.as_deref())
+}
+
+fn aceptadas_en_manifiesto(texto: &str) -> Vec<String> {
+    texto.lines().skip(1).filter_map(|linea| {
+        let campos: Vec<&str> = linea.split('\t').collect();
+        (campos.get(4) == Some(&"accepted")).then(|| campos[0].to_string())
+    }).collect()
+}
+
+fn elegir_dois(contenido: &str, catalogo: &str, solo_relevante: bool, max: usize, aceptadas: Option<&[String]>) -> Result<Vec<String>, String> {
     let mut lineas = contenido.lines();
     let encabezado: Vec<&str> = lineas.next().ok_or_else(|| format!("{catalogo} está vacío"))?.split('\t').collect();
     let columna = |nombre: &str| encabezado.iter().position(|valor| *valor == nombre);
     let doi = columna("doi").ok_or_else(|| format!("{catalogo} no tiene columna 'doi'"))?;
     let pdf_url = columna("pdf_url").ok_or_else(|| format!("{catalogo} no tiene columna 'pdf_url'"))?;
     let decision = columna("decision");
+    let identidad = columna("identity");
     let mut dois = Vec::new();
     for linea in lineas {
         if linea.trim().is_empty() || linea.starts_with('#') {
@@ -254,7 +281,14 @@ fn dois_pendientes(catalogo: &str, solo_relevante: bool, max: usize) -> Result<V
         }
         let campos: Vec<&str> = linea.split('\t').collect();
         let valor = normalizar_doi(campos.get(doi).unwrap_or(&""));
-        if valor.is_empty() || !campos.get(pdf_url).unwrap_or(&"").is_empty() || dois.contains(&valor) {
+        if valor.is_empty() || dois.contains(&valor) {
+            continue;
+        }
+        let ya_tiene = match aceptadas {
+            Some(aceptadas) => identidad.and_then(|pos| campos.get(pos)).is_some_and(|id| aceptadas.iter().any(|otra| otra == id)),
+            None => !campos.get(pdf_url).unwrap_or(&"").is_empty(),
+        };
+        if ya_tiene {
             continue;
         }
         if solo_relevante && decision.and_then(|pos| campos.get(pos)).copied() != Some("relevante") {
@@ -502,9 +536,13 @@ fn fila_tsv(obra: &str) -> Option<String> {
 }
 
 // La ubicación abierta va primero: es la que el descargador debe probar antes
-// que el resto.
+// que el resto. Al final van las landings de las ubicaciones abiertas que no
+// declaran PDF, casi siempre de repositorio, de donde `descargar` saca el PDF
+// por `citation_pdf_url` o por la API de DSpace 7. La de doi.org no sirve:
+// lleva a la editorial, que ya está entre los PDF si los ofrece.
 fn pdf_urls(obra: &str, ubicacion: &str) -> Vec<String> {
     let mut urls = Vec::new();
+    let mut landings = Vec::new();
     if let Some(url) = json_string(ubicacion, "pdf_url") {
         urls.push(url);
     }
@@ -514,7 +552,18 @@ fn pdf_urls(obra: &str, ubicacion: &str) -> Vec<String> {
                 if !urls.contains(&url) {
                     urls.push(url);
                 }
+            } else if json_bool(otra, "is_oa") == Some(true) {
+                if let Some(landing) = json_string(otra, "landing_page_url").filter(|landing| !landing.contains("://doi.org/")) {
+                    if !landings.contains(&landing) {
+                        landings.push(landing);
+                    }
+                }
             }
+        }
+    }
+    for landing in landings {
+        if !urls.contains(&landing) {
+            urls.push(landing);
         }
     }
     urls
@@ -611,6 +660,23 @@ mod tests {
         assert_eq!(cupo("200\t\t\t"), None);
         assert!(motivo_del_fallo("429\t63890\t0\t10000").contains("cupo diario (quedan 0 de 10000 créditos) y vuelve"));
         assert!(motivo_del_fallo("429\t1\t9000\t10000").contains("límite de peticiones; quedan 9000 de 10000 créditos)"));
+    }
+
+    #[test]
+    fn suma_las_landings_abiertas_despues_de_los_pdf() {
+        let obra = r#"{"locations":[{"is_oa":false,"landing_page_url":"https://doi.org/10.1/x","pdf_url":null},{"is_oa":true,"landing_page_url":"https://hdl.handle.net/10986/1","pdf_url":null},{"is_oa":true,"landing_page_url":"https://repo.edu/x","pdf_url":"https://repo.edu/x.pdf"},{"is_oa":true,"landing_page_url":"https://doi.org/10.1/x","pdf_url":null},{"is_oa":false,"landing_page_url":"https://cerrada.com/x","pdf_url":null}]}"#;
+        let mejor = r#"{"pdf_url":"https://repo.edu/x.pdf"}"#;
+        assert_eq!(pdf_urls(obra, mejor), vec!["https://repo.edu/x.pdf", "https://hdl.handle.net/10986/1"]);
+    }
+
+    #[test]
+    fn fallidas_elige_las_relevantes_sin_accepted_aunque_tengan_pdf() {
+        let catalogo = "identity\tdoi\tpdf_url\tdecision\ndoi:10.1/a\t10.1/a\thttps://e.com/a.pdf\trelevante\ndoi:10.1/b\t10.1/b\thttps://e.com/b.pdf\trelevante\ndoi:10.1/c\t10.1/c\t\trelevante\ndoi:10.1/d\t10.1/d\thttps://e.com/d.pdf\tdescartado\n";
+        let manifiesto = "id\ttitle\tsource_url\tpath\tstatus\treason\tbytes\tsha256\ndoi:10.1/a\tA\thttps://e.com/a.pdf\ta.pdf\taccepted\tPDF verificado\t1\tx\ndoi:10.1/b\tB\thttps://e.com/b.pdf\t\tblocked_challenge\tchallenge\t0\t\n";
+        let aceptadas = aceptadas_en_manifiesto(manifiesto);
+        assert_eq!(aceptadas, vec!["doi:10.1/a"]);
+        assert_eq!(elegir_dois(catalogo, "c.tsv", true, 10, Some(&aceptadas)).unwrap(), vec!["10.1/b", "10.1/c"]);
+        assert_eq!(elegir_dois(catalogo, "c.tsv", false, 10, None).unwrap(), vec!["10.1/c"]);
     }
 
     #[test]

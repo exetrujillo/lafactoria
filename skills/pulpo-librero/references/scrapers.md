@@ -210,7 +210,7 @@ ejemplo `doc-type:workingPaper`), `--id HANDLE` (repetible). `published` trae
 el día de depósito cuando cae en el año de publicación, y si no, solo el año.
 `cited_by` va siempre vacío. El PDF sale del mismo host, así que basta
 `--allow-host www.econstor.eu`, pero el servidor entrega a unos 16 KB/s y un
-archivo de más de 1 MB puede cortar en los 60 s de `descargar`.
+PDF de varios MB tarda minutos. `descargar` no lo corta mientras siga llegando.
 
 ## HAL
 
