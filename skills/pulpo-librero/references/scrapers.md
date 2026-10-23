@@ -21,6 +21,7 @@ Qué señal de tracción trae cada uno:
 | `semantic-scholar.rs` | todos | citas de Semantic Scholar | arXiv seguro; editoriales a veces |
 | `crossref.rs` | todos, con DOI | `is-referenced-by-count` | el de la editorial; Nature y Springer sí, Wiley y MDPI no |
 | `huggingface-papers.rs` | IA y ML | vacío (`upvotes` aparte) | arXiv |
+| `acl-anthology.rs` | lingüística computacional y PLN | vacío (`award` aparte) | sí, en `aclanthology.org` |
 | `osf-preprints.rs` | psicología, ciencias sociales | vacío | sí, por bucket firmado |
 | `europepmc.rs` | biomedicina, neurociencias | `citedByCount` | no (challenge); resolver por DOI |
 | `biorxiv.rs` | neurociencias, ciencias de la vida | vacío | sí |
@@ -91,6 +92,70 @@ una cita; `buscar` no la lleva al catálogo, así que si el voto decide una
 revisión, léelo del TSV antes de fusionar. Para descargar basta `--allow-host
 arxiv.org`. La identidad queda `huggingface-papers:<id>` y no se fusiona sola
 con la fila `arxiv:<id>vN` de la misma obra: reconcílialas antes de descargar.
+
+## ACL Anthology
+
+No tiene API de búsqueda: el adaptador lee el XML del repositorio de la
+Anthology y filtra en el cliente. `--datos` es un directorio dentro de `<tmp>`
+donde el XML se baja una vez y se reusa. Sin `--coleccion` ni `--id` baja el
+tarball completo (58 MB, unos 30 s); con ellas, solo esas colecciones.
+
+```sh
+rustc scripts/acl-anthology.rs -O -o <tmp>/pulpo-acl
+<tmp>/pulpo-acl search --datos <tmp>/acl --query "hate speech OR toxicity" --desde 2024-10-19 --max 50 --out <tmp>/acl.tsv
+<tmp>/pulpo-acl search --datos <tmp>/acl --venue acl,emnlp,naacl,findings --query "retrieval augmented" --out <tmp>/acl.tsv
+<tmp>/pulpo-acl search --datos <tmp>/acl --coleccion 2025.coling,2024.lrec --query "low-resource" --out <tmp>/acl.tsv
+<tmp>/pulpo-acl search --datos <tmp>/acl --id 2025.coling-main.420 --id P19-1001 --out <tmp>/acl-ids.tsv
+<tmp>/pulpo-librero buscar --input <tmp>/acl.tsv --dest /ruta/biblioteca --source acl-anthology
+```
+
+Flags: `--coleccion LISTA` (el nombre del archivo XML: `2025.coling`,
+`2024.findings`, o `P19` para lo anterior a 2020), `--venue LISTA` (el `<venue>`
+del volumen: `acl`, `emnlp`, `coling`, `lrec`, `findings`, `semeval`...) e
+`--id` (repetible). `--query` busca en título y resumen con la misma regla que
+bioRxiv. `published` llega al mes, que es la precisión de la Anthology, y un mes
+igual al de `--desde` pasa. Ordena de lo más nuevo a lo más viejo. `cited_by`
+va vacío. La columna extra `award` trae el premio de la obra (Outstanding Paper,
+Best Paper...), y `buscar` no la lleva al catálogo: si el premio decide una
+revisión, léelo del TSV antes de fusionar.
+
+`oa_status` dice qué hay. `abierto` es un PDF en `aclanthology.org`.
+`retractado` y `retirado` salen sin `pdf_url`: descártalas con ese motivo.
+`externo` es una obra alojada en otro sitio, en `landing_url`, sin saber si es
+abierta, y `sin-pdf` es una entrada sin archivo. Con revisiones, `version` y
+`pdf_url` fijan la última (`<id>v2.pdf`). Para descargar basta `--allow-host
+aclanthology.org`.
+
+**Enlace con arXiv.** Las obras con DOI pasan por `openalex resolver` como
+cualquier otra. Las que no lo tienen (COLING 2025, LREC-COLING 2024, SemEval,
+muchos talleres) no las conoce OpenAlex, y su único enlace con el resto de la
+literatura es el preprint. Cosecha con `arxiv.rs` los preprints que declaran la
+venue y enlázalos con las filas del catálogo:
+
+```sh
+<tmp>/pulpo-arxiv search --query '(co:COLING AND co:2025) OR (jr:COLING AND jr:2025) OR co:COLING2025 OR co:COLING25' --max 500 --out <tmp>/ax1.tsv
+<tmp>/pulpo-arxiv search --query 'co:"International Conference on Computational Linguistics" OR jr:"International Conference on Computational Linguistics"' --max 500 --out <tmp>/ax2.tsv
+<tmp>/pulpo-arxiv search --query 'co:COLING OR jr:COLING' --desde 2024-06-01 --max 500 --out <tmp>/ax3.tsv
+<tmp>/pulpo-acl enlazar --catalogo /ruta/biblioteca/catalogo.tsv \
+  --arxiv <tmp>/ax1.tsv --arxiv <tmp>/ax2.tsv --arxiv <tmp>/ax3.tsv --out <tmp>/enlaces.tsv
+<tmp>/pulpo-librero buscar --input <tmp>/enlaces.tsv --dest /ruta/biblioteca --source arxiv-enlazado
+```
+
+arXiv indexa palabras completas, así que pide la sigla y el año por separado,
+la sigla pegada (`COLING2025`, `COLING25`) y el nombre largo, en el comentario
+(`co:`) y en el journal-ref (`jr:`). Una ventana con `--desde` desde la
+convocatoria atrapa formas como "COLING'25". Si una consulta trae tantas como
+`--max`, repite con `--start`. Para una colección bastan tres o cuatro pedidos.
+
+`enlazar` mira las filas de la Anthology que no están retractadas ni retiradas.
+Acepta el título idéntico tras normalizar o una similitud de 0,9 o más
+(Levenshtein, o palabras en común si el título se reordenó), siempre que los
+números del título coincidan. Un preprint que reclaman dos filas no se asigna.
+La salida conserva la `identity` de cada fila y suma el PDF de arXiv a
+`pdf_urls` detrás del de ACL, así que `buscar` lo fusiona en la fila correcta
+sin tocar la decisión. Las columnas `arxiv` y `similitud` sirven para revisar
+los enlaces tolerantes antes de fusionar. Semantic Scholar devuelve las citas de
+esos preprints en batch, por id de arXiv (ver `fuentes.md`).
 
 ## OSF Preprints
 

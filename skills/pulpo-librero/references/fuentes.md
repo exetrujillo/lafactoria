@@ -196,6 +196,8 @@ Algunas obras traen solo `year`, sin `publicationDate` (63 de 1000 en el sondeo 
 
 Sin clave el cupo es compartido y se agota sin aviso. El 429 no trae `Retry-After` ni cabeceras de límite, y en el sondeo se encadenó durante varios minutos. El scraper informa el 429 aparte y sale con 1. No lo relances en seguida: espera varios minutos o usa otra fuente. `/paper/batch`, que pide hasta 500 obras por DOI en un solo POST, también dio 429 sin clave el 2026-10-19, así que tampoco sirve para buscarle copia a las obras que fallaron. `fieldsOfStudy` usa la lista de campos de Semantic Scholar (Computer Science, Psychology, Sociology, Economics, Medicine, Biology, Mathematics y otros). No hay un campo Neuroscience: para neurociencias usa Psychology, Medicine o Biology.
 
+El 2026-10-23, sin clave, `/paper/batch` respondió 200 dos veces y 429 varias. Un solo POST con 100 ids `ARXIV:` de preprints de COLING 2025 trajo `citationCount` para los 100, con mediana 6,5, y la mitad venía fusionada con su entrada `conf/coling` de DBLP. Acepta como id `ACL:<id de la Anthology>`, pero Semantic Scholar solo lo tiene hasta 2023 y en LREC-COLING 2024. COLING 2025, SemEval 2025, Findings 2024 y ACL 2026 no lo traen. `URL:https://aclanthology.org/...` responde 400 ("No valid paper ids given"), y DBLP sale en la respuesta pero no se acepta como entrada. `/paper/search/match` acertó la obra en los 10 títulos de ACL que respondieron, pero dio 429 en 7 de 18 pedidos, también después de 8 minutos sin pedir nada. Sin clave no sirve para recorrer una colección. Con clave el límite es 1 pedido por segundo en todos los endpoints.
+
 ## Crossref
 
 Usa la API REST (`api.crossref.org/works`) para descubrir obras recientes con
@@ -248,6 +250,22 @@ Cuidados:
 - La identidad del catálogo queda `huggingface-papers:<id>` y no se fusiona sola con `arxiv:<id>vN`. Antes de descargar conviene reconciliar las dos filas.
 - La cobertura se limita a lo que alguien subió a Daily Papers o indexó Hugging Face.
 - Algunos PDF de arXiv pasan de 20 MB.
+
+## ACL Anthology
+
+Medida el 2026-10-23. Tiene unas 128.500 obras de lingüística computacional y PLN: ACL, EMNLP, NAACL, EACL, Findings, TACL, CL, COLING, LREC, SemEval y cientos de talleres. Los metadatos son abiertos y los PDF también, con CC BY 4.0 desde 2016 y CC BY-NC-SA 3.0 antes, salvo material de otros titulares.
+
+No hay API de búsqueda. El buscador del sitio es Google Custom Search y la página de acceso a datos solo remite al repositorio de GitHub y a su paquete de Python, que exige clonar el repositorio. El adaptador `scripts/acl-anthology.rs` lee el XML de `data/xml/` del repositorio y filtra en el cliente. Lo baja de dos formas:
+- El tarball de la rama principal (`codeload.github.com`, 58 MB en 30 s, 181 MB descomprimido, 1731 colecciones). Recorrerlo entero tarda 21 s y usa 200 MB de memoria.
+- Una colección por archivo desde `raw.githubusercontent.com` (de 1 a 7 MB).
+
+El volcado `anthology+abstracts.bib.gz` del sitio (42 MB, diario) se descartó. Trae los 12 retractados sin marca, por ejemplo `2022.coling-1.306`, y no trae revisiones, premios ni el estado del PDF. El XML sí trae todo eso. Además declara `<pages>`, el hash CRC32 del PDF, el idioma y el id de OpenReview de los autores recientes. El id de cada obra se arma con la regla de `build_id` del paquete. Comparado con los comentarios del propio XML, coincidió en las 128.410 obras que los tienen.
+
+`aclanthology.org` sirve el PDF desde un Apache, sin Cloudflare ni challenge, con el UA de navegador y con el de curl, y no publica `robots.txt`. Las revisiones tienen URL fija (`<id>v1.pdf`, `<id>v2.pdf`), y `<id>.pdf` es siempre la última. El CRC32 del PDF bajado coincidió con el `hash` del XML, y sus 18 páginas con `<pages>155-172`. La ficha (`<id>/`) declara `citation_pdf_url`, pero minificada y sin comillas (`content="..." name=citation_pdf_url`).
+
+Lo que falta es tracción. La Anthology no da citas, y el 45 % de las obras no tiene DOI. Entre 2025 y 2026 falta en el 17 %: COLING 2025 completo, 1567 de LREC-COLING 2024, RANLP, PROPOR, JEP-TALN, CCL, NoDaLiDa, EAMT y parte de SemEval. OpenAlex no conoce esas obras. De 3 probadas por título, 2 aparecían solo como el preprint de arXiv y 1 no aparecía. Para las que tienen DOI, OpenAlex ya trae `aclanthology.org/<id>.pdf` como ubicación.
+
+El enlace con arXiv sale de los preprints que declaran la venue en el comentario o en el journal-ref. arXiv indexa palabras completas, así que `co:COLING AND co:2025` no ve "COLING2025", "COLING'25" ni el nombre largo, que va en `jr:`. Con tres o cuatro consultas por colección y el emparejamiento de títulos de `acl-anthology enlazar` quedaron enlazadas 291 de 848 obras de COLING 2025 (34 %) y 497 de 1567 de LREC-COLING 2024 (32 %). Todas coincidieron con un emparejamiento revisado a mano. Los 14 enlaces tolerantes eran la misma obra con una errata, una sigla, una tilde, otra ortografía o el título reordenado. Por debajo de 0,9 de similitud aparecen obras distintas, por ejemplo BanglaQuAD contra KazQAD. Con un número distinto en el título (año, número de tarea) no hay enlace, porque SemEval y WMT repiten los títulos de sus overviews cada año. Por título exacto, uno por uno, arXiv había encontrado preprint para 2 de 12.
 
 ## OSF Preprints (PsyArXiv, SocArXiv, MetaArXiv)
 
@@ -445,8 +463,8 @@ La copia de ese repositorio ya estaba entre las ubicaciones de OpenAlex.
 
 ## Fuentes sondeadas y descartadas
 
-Sondeadas el 2026-10-19 con el mismo criterio que las demás. Quedan acá para que
-una ronda futura no vuelva a medirlas desde cero.
+Sondeadas el 2026-10-19 y el 2026-10-23 con el mismo criterio que las demás.
+Quedan acá para que una ronda futura no vuelva a medirlas desde cero.
 
 ### OpenReview: sin PDF ni tracción
 
@@ -460,6 +478,26 @@ challenge. Límite de 20 peticiones por 60 s. El PDF de `openreview.net` y de
 `api2.openreview.net` da `403` con challenge, sin `%PDF-`. Las entradas dblp
 traen una URL de arXiv en `content.pdf`, sin medir. Para esas conferencias,
 arXiv, Semantic Scholar y Hugging Face Papers cubren lo mismo con PDF.
+
+El 2026-10-23 se midió como enlace entre la ACL Anthology y arXiv, y tampoco
+sirve. El XML de la Anthology trae el id de OpenReview de los autores, pero
+solo en el 3,5 % de las obras sin DOI de 2024 a 2026, y en ninguna de LREC,
+COLING ni SemEval. `/profiles?id=~X` y `/notes?content.authorids=~X`
+respondieron `403 ChallengeRequiredError`, y la búsqueda por título no encontró
+el registro.
+
+### DBLP: tras Anubis también para curl
+
+Tendría el enlace entre la versión de congreso y el preprint de CoRR, pero la
+API (`dblp.org/search/publ/api?format=json`) respondió el 2026-10-23 un `202`
+con la página de Anubis al UA por defecto de curl. Es la excepción a "Anubis y
+Springer desafían al navegador, no a curl".
+
+### Wikidata: casi sin obras de la ACL Anthology
+
+La propiedad P7505 (id de la ACL Anthology) está en unos 430 ítems, frente a
+128.500 obras. De los 54 papers de 2024 en adelante, 8 traen arXiv. Ningún
+ítem cita a 16 de los 24 sin DOI, y no estaba ninguno de los tres ids probados.
 
 ### SSRN: todo el dominio tras un challenge
 
@@ -582,7 +620,8 @@ a un Chrome 151 con `sec-ch-ua`, `Sec-Fetch-*` y `Upgrade-Insecure-Requests`.
 Con el UA por defecto de curl (`curl/8.5.0`) o con uno de script, HAL,
 EconStor, SSOAR y Springer entregaron `%PDF-`. Es la política por defecto de
 Anubis, que desafía a quien dice ser navegador y deja pasar al cliente que no lo
-dice. Springer pasa antes por `idp.springer.com`, que solo pone una cookie y
+dice. Cada sitio puede cambiarla: DBLP desafía también a curl (ver "Fuentes
+sondeadas y descartadas"). Springer pasa antes por `idp.springer.com`, que solo pone una cookie y
 vuelve con `?error=cookies_not_supported`, así que hace falta autorizar
 `springer.com`.
 

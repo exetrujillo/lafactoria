@@ -738,7 +738,10 @@ fn atributo(original: &str, bajo: &str, nombre: &str) -> Option<String> {
         if inicio > 0 && !bajo.as_bytes()[inicio - 1].is_ascii_whitespace() { continue; }
         let resto = &original[desde..];
         let comilla = resto.chars().next()?;
-        if comilla != '"' && comilla != '\'' { return None; }
+        // El HTML minificado (Hugo, en la ACL Anthology) quita las comillas.
+        if comilla != '"' && comilla != '\'' {
+            return Some(resto[..resto.find(|c: char| c.is_ascii_whitespace()).unwrap_or(resto.len())].to_string()).filter(|valor| !valor.is_empty());
+        }
         let valor = &resto[1..];
         return valor.find(comilla).map(|largo| valor[..largo].to_string());
     }
@@ -951,6 +954,8 @@ mod tests {
         assert_eq!(enlace_pdf_citado(b"<meta content=\"//cdn.example.org/a.pdf\" name=\"citation_pdf_url\">", base).as_deref(), Some("https://cdn.example.org/a.pdf"));
         assert_eq!(enlace_pdf_citado(b"<meta name=\"description\" content=\"citation_pdf_url\">", base), None);
         assert_eq!(enlace_pdf_citado(b"<meta data-name=\"citation_pdf_url\" content=\"https://x.org/a.pdf\">", base), None);
+        assert_eq!(enlace_pdf_citado(b"<meta content=\"https://aclanthology.org/2025.coling-main.420.pdf\" name=citation_pdf_url>", base).as_deref(), Some("https://aclanthology.org/2025.coling-main.420.pdf"));
+        assert_eq!(enlace_pdf_citado(b"<meta name=citation_pdf_url content=/files/a.pdf>", base).as_deref(), Some("https://research.vu.nl/files/a.pdf"));
         assert_eq!(enlace_pdf_citado(b"<p>sin meta</p>", base), None);
     }
 

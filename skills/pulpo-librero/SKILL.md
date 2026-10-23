@@ -34,7 +34,8 @@ Antes de buscar o descargar, pregunta en una sola tanda:
    una de ellas o abre una sub-biblioteca nueva (ver "Sub-bibliotecas").
 3. ¿Qué fuentes abiertas se autorizan? Si no se especifica, propone según el
    campo y el tipo de obra: arXiv, Semantic Scholar y Hugging Face Papers para
-   IA y computación; Crossref y OpenAlex para cualquier campo con DOI; OSF
+   IA y computación; la ACL Anthology para lingüística computacional y PLN;
+   Crossref y OpenAlex para cualquier campo con DOI; OSF
    Preprints, HAL y EconStor para ciencias sociales, estadística y economía;
    Europe PMC y bioRxiv para neurociencias y biomedicina; SciELO y LA
    Referencia para literatura hispana; Internet Archive para libros. La tabla
@@ -445,14 +446,17 @@ respuestas.
 
 ## Adaptadores de frontera
 
-Once adaptadores más cubren lo que arXiv, OpenAlex e Internet Archive no
-alcanzan: Semantic Scholar, Crossref, Hugging Face Papers, OSF Preprints, Europe
-PMC, bioRxiv y medRxiv, SciELO, LA Referencia (con Redalyc), EconStor, HAL y
-CORE. Todos siguen el mismo contrato (`--query`, `--out`, `--desde`, `--max`,
-pausa de 3 s, TSV con `published` y `cited_by`) y se invocan como dice
-`references/scrapers.md`, que trae además la tabla de qué señal de tracción y
-qué PDF entrega cada uno. Lo medido sobre cada API, y lo que se sondeó y se
-descartó (OpenReview, SSRN), está en `references/fuentes.md`.
+Doce adaptadores más cubren lo que arXiv, OpenAlex e Internet Archive no
+alcanzan: Semantic Scholar, Crossref, Hugging Face Papers, ACL Anthology, OSF
+Preprints, Europe PMC, bioRxiv y medRxiv, SciELO, LA Referencia (con Redalyc),
+EconStor, HAL y CORE. Todos siguen el mismo contrato (`--query`, `--out`,
+`--desde`, `--max`, pausa de 3 s, TSV con `published` y `cited_by`) y se
+invocan como dice `references/scrapers.md`, que trae además la tabla de qué
+señal de tracción y qué PDF entrega cada uno. La ACL Anthology pide además
+`--datos`, el directorio donde baja su XML, y su subcomando `enlazar` une las
+obras sin DOI con su preprint de arXiv. Lo medido sobre cada API, y lo que se
+sondeó y se descartó (OpenReview, SSRN, DBLP, Wikidata), está en
+`references/fuentes.md`.
 
 Dos reglas valen para todos. La primera: una fuente sin citas no es una fuente
 sin tracción, porque `openalex resolver` la trae después por DOI. La segunda:

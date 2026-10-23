@@ -2,6 +2,20 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.21.0] - 2026-10-23
+
+### Agregado
+
+- **`pulpo-librero` suma la ACL Anthology.** Son unas 128.500 obras abiertas de lingüística computacional y PLN, y el 45 % no tiene DOI: COLING 2025 completo, la mayor parte de LREC-COLING 2024, SemEval y muchos talleres. OpenAlex no conoce esas obras. La Anthology no tiene API de búsqueda, así que `acl-anthology.rs search` lee el XML de su repositorio y filtra en el cliente por texto, fecha, venue, colección o id. Baja el tarball completo (58 MB) o solo las colecciones pedidas a un directorio de la corrida que se reusa. Se prefirió el XML al volcado BibTeX del sitio, que trae los papers retractados sin marca. `oa_status` distingue `abierto`, `retractado`, `retirado`, `externo` y `sin-pdf`, y solo el primero lleva `pdf_url`. Con revisiones, `version` y `pdf_url` fijan la última (`<id>v2.pdf`). La columna extra `award` trae el premio de la obra. Los ids se arman con la regla del paquete oficial y coincidieron con los 128.410 que el XML declara. El PDF sale de `aclanthology.org` sin challenge. `acl-anthology enlazar` empareja las filas de la Anthology del catálogo con los preprints que `arxiv.rs` cosecha por venue (`co:` y `jr:`), y suma el PDF de arXiv a `pdf_urls` detrás del de ACL, conservando la `identity` para que `buscar` lo fusione en la fila correcta. Acepta el título idéntico o una similitud de 0,9 o más, con los mismos números en el título. Con tres o cuatro pedidos a arXiv por colección enlazó 291 de 848 obras de COLING 2025 y 497 de 1567 de LREC-COLING 2024, todas iguales a un emparejamiento revisado a mano.
+
+### Corregido
+
+- `descargar` no seguía el `citation_pdf_url` de una landing cuyo HTML viene minificado sin comillas (`content="..." name=citation_pdf_url`), como la de la ACL Anthology. Ahora lee el valor sin comillas hasta el primer espacio, y una ficha de ACL baja "vía citation_pdf_url".
+
+### Cambiado
+
+- `fuentes.md` registra lo medido el 2026-10-23: la ACL Anthology; que Semantic Scholar solo tiene el id `ACL:` hasta 2023 y en LREC-COLING 2024, no acepta URLs de la Anthology y sin clave dio 429 en 7 de 18 búsquedas por título, aunque su batch devolvió citas para 100 preprints en un pedido; y tres fuentes descartadas como enlace con arXiv: OpenReview (ids de autor en el 3,5 % de las obras sin DOI), DBLP (Anubis también para curl) y Wikidata (unos 430 ítems).
+
 ## [2.20.0] - 2026-10-19
 
 ### Agregado
