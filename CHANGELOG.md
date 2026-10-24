@@ -2,6 +2,12 @@
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
+## [2.22.0] - 2026-10-24
+
+### Agregado
+
+- **`podador` poda las memorias del arnés al cerrar una sesión.** El arnés guarda memorias al vuelo, de a una, y las que ya tenía dejan de ser ciertas sin que nadie las toque. La skill ubica el directorio de memorias que el arnés declara, o lo busca en `references/arneses.md`, reúne lo que la sesión enseñó (conversación, commits, cuaderno de pendientes), cruza cada memoria existente comprobando contra el repositorio lo que nombra, clasifica en nueva, corregir, borrar o queda, muestra el diff y pide una sola confirmación. Escribe solo lo aprobado, en el formato del arnés, y no duplica lo que ya dicen el código, git, el CHANGELOG o el CLAUDE.md. Si el arnés no guarda memorias por proyecto, termina en una línea sin crear nada. `references/arneses.md` registra lo medido el 2026-10-24: Claude Code guarda un directorio por proyecto con un índice del que carga solo las primeras 200 líneas o 25 KB y un archivo por memoria con frontmatter; OpenCode no tiene memorias propias, solo instrucciones de proyecto y plugins de terceros. Está pensada como gadget: un workflow de sesión puede invocarla en su paso de cierre, y funciona igual invocada por su nombre.
+
 ## [2.21.0] - 2026-10-23
 
 ### Agregado
